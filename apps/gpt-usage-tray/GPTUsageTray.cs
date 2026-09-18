@@ -18,7 +18,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("GPT Usage Tray")]
 [assembly: AssemblyProduct("GPT Usage Tray")]
 [assembly: AssemblyDescription("Codex usage in the Windows notification area")]
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
 
 class UsageWindow {
     public string Name;
@@ -180,12 +180,88 @@ class DetailsForm : Form {
     static string FormatTokens(long? value){if(!value.HasValue)return "—";if(value.Value>=1000000000)return (value.Value/1000000000.0).ToString("0.00")+"B";if(value.Value>=1000000)return (value.Value/1000000.0).ToString("0.0")+"M";if(value.Value>=1000)return (value.Value/1000.0).ToString("0.0")+"K";return value.Value.ToString();}
 }
 
+class UsageWidgetForm : Form {
+    double? remaining;
+    readonly ContextMenuStrip menu=new ContextMenuStrip();
+    readonly System.Windows.Forms.Timer anchorTimer=new System.Windows.Forms.Timer();
+    IntPtr taskbarHandle=IntPtr.Zero;
+    public event EventHandler DetailsRequested;
+    public event EventHandler RefreshRequested;
+    public event EventHandler HideRequested;
+
+    public UsageWidgetForm() {
+        Text="GPT Usage Tray";ClientSize=new Size(44,44);FormBorderStyle=FormBorderStyle.None;StartPosition=FormStartPosition.Manual;
+        ShowInTaskbar=false;TopMost=false;BackColor=Color.Fuchsia;TransparencyKey=Color.Fuchsia;DoubleBuffered=true;Cursor=Cursors.Hand;
+        menu.Items.Add("상세 보기",null,delegate {if(DetailsRequested!=null)DetailsRequested(this,EventArgs.Empty);});
+        menu.Items.Add("지금 새로고침",null,delegate {if(RefreshRequested!=null)RefreshRequested(this,EventArgs.Empty);});
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("큰 위젯 숨기기",null,delegate {if(HideRequested!=null)HideRequested(this,EventArgs.Empty);});
+        ContextMenuStrip=menu;
+        MouseClick+=delegate(object sender,MouseEventArgs e){if(e.Button==MouseButtons.Left&&DetailsRequested!=null)DetailsRequested(this,EventArgs.Empty);};
+        Shown+=delegate {AttachToTaskbar();};
+        anchorTimer.Interval=3000;anchorTimer.Tick+=delegate {if(Visible)AttachToTaskbar();};anchorTimer.Start();
+        ApplyCircleShape();
+    }
+
+    protected override bool ShowWithoutActivation {get{return true;}}
+    protected override CreateParams CreateParams {get{var value=base.CreateParams;value.ExStyle|=0x80;return value;}}
+
+    public void UpdateData(UsageSnapshot snapshot) {
+        remaining=snapshot.Remaining;
+        Invalidate();
+    }
+
+    public void ShowError() {remaining=null;Invalidate();}
+
+    public void AttachToTaskbar() {
+        IntPtr bar=FindWindow("Shell_TrayWnd",null);if(bar==IntPtr.Zero)return;
+        RECT barRect;if(!GetWindowRect(bar,out barRect))return;
+        int barWidth=barRect.Right-barRect.Left,barHeight=barRect.Bottom-barRect.Top;
+        int x,y;
+        if(barWidth>=barHeight) {
+            x=barRect.Left+8;y=barRect.Top+Math.Max(0,(barHeight-Height)/2);
+        } else {
+            x=barRect.Left+Math.Max(0,(barWidth-Width)/2);y=barRect.Bottom-Height-8;
+        }
+        if(taskbarHandle!=bar){taskbarHandle=bar;SetWindowLongPtr(Handle,-8,bar);}
+        SetWindowPos(Handle,new IntPtr(-1),x,y,Width,Height,0x0010|0x0040);
+    }
+
+    void ApplyCircleShape() {
+        IntPtr region=CreateEllipticRgn(0,0,Width+1,Height+1);
+        Region=Region.FromHrgn(region);DeleteObject(region);
+    }
+
+    protected override void OnPaint(PaintEventArgs e) {
+        base.OnPaint(e);Graphics g=e.Graphics;g.SmoothingMode=SmoothingMode.None;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
+        double value=remaining.HasValue?Math.Max(0,Math.Min(100,remaining.Value)):0;
+        Color color=remaining.HasValue?UsageContext.ColorFor(value):Color.FromArgb(125,135,150);
+        RectangleF ring=new RectangleF(4,4,36,36);
+        using(var track=new Pen(Color.FromArgb(125,135,150),5)){track.StartCap=LineCap.Round;track.EndCap=LineCap.Round;g.DrawArc(track,ring,-90,359.8f);}
+        if(remaining.HasValue&&value>0)using(var progress=new Pen(color,5)){progress.StartCap=LineCap.Round;progress.EndCap=LineCap.Round;g.DrawArc(progress,ring,-90,(float)(Math.Min(99.9,value)/100*359.8));}
+        string percent=remaining.HasValue?Math.Round(value).ToString("0")+"%":"?";
+        float percentSize=percent.Length>=4?11:14;
+        using(var font=new Font("Segoe UI",percentSize,FontStyle.Bold,GraphicsUnit.Pixel))
+        using(var black=new SolidBrush(Color.Black))
+        using(var format=new StringFormat{Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center})g.DrawString(percent,font,black,ring,format);
+    }
+
+    protected override void Dispose(bool disposing) {if(disposing){anchorTimer.Dispose();menu.Dispose();}base.Dispose(disposing);}
+    [DllImport("gdi32.dll")]static extern IntPtr CreateEllipticRgn(int left,int top,int right,int bottom);
+    [DllImport("gdi32.dll")]static extern bool DeleteObject(IntPtr handle);
+    [DllImport("user32.dll",CharSet=CharSet.Auto)]static extern IntPtr FindWindow(string className,string windowName);
+    [DllImport("user32.dll")]static extern bool GetWindowRect(IntPtr handle,out RECT rect);
+    [DllImport("user32.dll",EntryPoint="SetWindowLongPtr",SetLastError=true)]static extern IntPtr SetWindowLongPtr(IntPtr handle,int index,IntPtr value);
+    [DllImport("user32.dll")]static extern bool SetWindowPos(IntPtr handle,IntPtr after,int x,int y,int width,int height,uint flags);
+    [StructLayout(LayoutKind.Sequential)]struct RECT {public int Left,Top,Right,Bottom;}
+}
+
 class UsageContext : ApplicationContext {
     const string RunKey=@"Software\Microsoft\Windows\CurrentVersion\Run";
     const string RunName="GPT Usage Tray";
     readonly NotifyIcon tray=new NotifyIcon();readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();readonly Control marshal=new Control();
-    DetailsForm details;Icon dynamicIcon;bool refreshing;UsageSnapshot current;
-    ToolStripMenuItem headline,windowLine,tokensLine,startup;
+    DetailsForm details;UsageWidgetForm widget;Icon dynamicIcon;bool refreshing;UsageSnapshot current;
+    ToolStripMenuItem headline,windowLine,tokensLine,startup,largeWidget;
     bool firstSuccess=true;
     public UsageContext() {
         marshal.CreateControl();
@@ -197,11 +273,14 @@ class UsageContext : ApplicationContext {
         tokensLine=new ToolStripMenuItem("") {Enabled=false};menu.Items.Add(tokensLine);menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("상세 보기",null,delegate{ShowDetails();});
         menu.Items.Add("지금 새로고침",null,delegate{Refresh();});
+        largeWidget=new ToolStripMenuItem("작업표시줄 위젯 표시") {Checked=true,CheckOnClick=true};
+        largeWidget.CheckedChanged+=delegate {if(widget!=null){if(largeWidget.Checked){widget.Show();widget.AttachToTaskbar();}else widget.Hide();}};menu.Items.Add(largeWidget);
         startup=new ToolStripMenuItem("Windows 시작 시 자동 실행") {Checked=IsStartupEnabled(),CheckOnClick=true};
         startup.CheckedChanged+=delegate {SetStartup(startup.Checked);};menu.Items.Add(startup);
         menu.Items.Add(new ToolStripSeparator());menu.Items.Add("종료",null,delegate{Exit();});tray.ContextMenuStrip=menu;
         timer.Interval=60000;timer.Tick+=delegate{Refresh();};timer.Start();
         SetStartup(true);startup.Checked=true;
+        widget=new UsageWidgetForm();widget.DetailsRequested+=delegate{ShowDetails();};widget.RefreshRequested+=delegate{Refresh();};widget.HideRequested+=delegate{largeWidget.Checked=false;};widget.Show();
         Refresh();
         var promotionTimer=new System.Windows.Forms.Timer {Interval=6000};promotionTimer.Tick+=delegate {promotionTimer.Stop();PromoteInTaskbar();promotionTimer.Dispose();};promotionTimer.Start();
     }
@@ -224,9 +303,10 @@ class UsageContext : ApplicationContext {
         string shortText=remaining.HasValue?"GPT 주간 잔여 "+remaining.Value.ToString("0")+"%":"GPT 사용량 정보 없음";tray.Text=TrimTooltip(shortText);
         headline.Text=shortText;windowLine.Text=WindowSummary(snapshot);tokensLine.Text="오늘 "+FormatTokens(snapshot.TodayTokens)+" · 누적 "+FormatTokens(snapshot.LifetimeTokens);
         if(details!=null)details.UpdateData(snapshot);
+        if(widget!=null)widget.UpdateData(snapshot);
         if(firstSuccess){firstSuccess=false;tray.BalloonTipTitle="GPT 사용량";tray.BalloonTipText=shortText+" · 아이콘을 클릭하면 상세 내용을 볼 수 있습니다.";tray.ShowBalloonTip(3500);}
     }
-    void SetError(string error){SetIcon(null);tray.Text="GPT 사용량 조회 실패";headline.Text="사용량 조회 실패";windowLine.Text=error;tokensLine.Text="";if(details!=null)details.ShowError(error);}
+    void SetError(string error){SetIcon(null);tray.Text="GPT 사용량 조회 실패";headline.Text="사용량 조회 실패";windowLine.Text=error;tokensLine.Text="";if(details!=null)details.ShowError(error);if(widget!=null)widget.ShowError();}
     void SetIcon(double? remaining) {
         double value=remaining.HasValue?Math.Max(0,Math.Min(100,remaining.Value)):0;Color color=remaining.HasValue?ColorFor(value):Color.FromArgb(125,135,150);
         var bitmap=new Bitmap(64,64);using(var g=Graphics.FromImage(bitmap)) {
@@ -247,7 +327,7 @@ class UsageContext : ApplicationContext {
     bool IsStartupEnabled(){using(var key=Registry.CurrentUser.OpenSubKey(RunKey))return key!=null&&key.GetValue(RunName)!=null;}
     void SetStartup(bool enabled){using(var key=Registry.CurrentUser.CreateSubKey(RunKey)){if(enabled)key.SetValue(RunName,"\""+Application.ExecutablePath+"\"");else key.DeleteValue(RunName,false);}}
     void PromoteInTaskbar(){try {using(var root=Registry.CurrentUser.OpenSubKey(@"Control Panel\NotifyIconSettings",true)){if(root==null)return;foreach(string name in root.GetSubKeyNames())using(var key=root.OpenSubKey(name,true)){if(key==null)continue;string path=Convert.ToString(key.GetValue("ExecutablePath"));if(!string.IsNullOrEmpty(path)&&string.Equals(Path.GetFullPath(path),Path.GetFullPath(Application.ExecutablePath),StringComparison.OrdinalIgnoreCase))key.SetValue("IsPromoted",1,RegistryValueKind.DWord);}}}catch{}}
-    void Exit(){timer.Stop();tray.Visible=false;if(details!=null)details.Dispose();tray.Dispose();if(dynamicIcon!=null)dynamicIcon.Dispose();ExitThread();}
+    void Exit(){timer.Stop();tray.Visible=false;if(details!=null)details.Dispose();if(widget!=null)widget.Dispose();tray.Dispose();if(dynamicIcon!=null)dynamicIcon.Dispose();ExitThread();}
     static void TrimWorkingSet(){try{using(var process=Process.GetCurrentProcess())SetProcessWorkingSetSize(process.Handle,new IntPtr(-1),new IntPtr(-1));}catch{}}
     protected override void Dispose(bool disposing){if(disposing){timer.Dispose();marshal.Dispose();}base.Dispose(disposing);}
     [DllImport("user32.dll",CharSet=CharSet.Auto)]static extern bool DestroyIcon(IntPtr handle);
@@ -263,6 +343,10 @@ class Program {
         }
         if(args.Length==2&&args[0]=="--ui-test") {
             try {using(var form=new DetailsForm()){form.UpdateData(CodexUsageReader.Read());form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}form.Dispose();}Environment.ExitCode=0;}
+            catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());Environment.ExitCode=1;}return;
+        }
+        if(args.Length==2&&args[0]=="--widget-test") {
+            try {var sample=new UsageSnapshot();sample.Windows.Add(new UsageWindow{Name="주간",Used=85,DurationMinutes=10080});using(var form=new UsageWidgetForm()){form.UpdateData(sample);form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}Environment.ExitCode=0;}
             catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());Environment.ExitCode=1;}return;
         }
         bool first;using(var mutex=new Mutex(true,"Local\\GPT-Usage-Tray",out first)){if(!first)return;Application.Run(new UsageContext());}

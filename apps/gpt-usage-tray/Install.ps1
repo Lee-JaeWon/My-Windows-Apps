@@ -28,4 +28,4 @@ $shortcut.Save()
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 New-ItemProperty -Path $runKey -Name 'GPT Usage Tray' -Value ('"' + $installedExecutable + '"') -PropertyType String -Force | Out-Null
 Start-Process -FilePath $installedExecutable
-Write-Host '설치가 완료되었습니다. 작업표시줄 알림 영역에서 사용량 아이콘을 확인하세요.'
+Write-Host '설치가 완료되었습니다. 작업표시줄 맨 왼쪽의 사용량 위젯을 확인하세요.'

@@ -6,7 +6,7 @@
 | --- | --- |
 | **GIF Generator** (v1.4) | MP4 → GIF, MP4 배속 변환 |
 | **Lab Server Monitor** (v1.0.2) | SSH로 서버 GPU·RAM 상태 확인 |
-| **GPT Usage Tray** (v1.0) | Codex Pro 주간 사용량을 작업표시줄에 표시 |
+| **GPT Usage Tray** (v1.1) | Codex Pro 주간 사용량을 작업표시줄 아이콘과 큰 위젯으로 표시 |
 
 ## GIF Generator
 
@@ -25,11 +25,12 @@
 ## GPT Usage Tray
 
 - Codex Pro의 주간 잔여 사용량을 Windows 알림 영역에 원형 링과 숫자로 표시합니다.
+- 작업표시줄 맨 왼쪽에 숫자가 들어간 큰 원형 위젯을 표시하며, 누르면 상세 창이 열립니다.
 - 잔여량이 줄어들수록 링 색상이 초록 → 노랑 → 빨강으로 바뀝니다.
 - 1분마다 갱신하며, 아이콘을 누르면 초기화 시각과 오늘·누적 토큰을 확인할 수 있습니다.
 - Windows 로그인 시 자동 실행되고, 상주 작업 집합은 테스트 PC에서 약 7~17MB였습니다.
 - 설치된 Codex와 ChatGPT 로그인을 사용하므로 API 키가 필요하지 않습니다.
-- [GPT Usage Tray v1.0.0 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/gpt-usage-tray-v1.0.0)
+- [GPT Usage Tray v1.1.0 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/gpt-usage-tray-v1.1.0)
 
 ## 빌드 및 실행
 

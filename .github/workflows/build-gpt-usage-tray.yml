@@ -18,8 +18,8 @@ jobs:
         run: .\build.ps1
       - name: Package
         shell: powershell
-        run: Compress-Archive -LiteralPath 'dist\GPT Usage Tray' -DestinationPath 'GPT-Usage-Tray-v1.0.0.zip' -CompressionLevel Optimal
+        run: Compress-Archive -LiteralPath 'dist\GPT Usage Tray' -DestinationPath 'GPT-Usage-Tray-v1.1.0.zip' -CompressionLevel Optimal
       - uses: actions/upload-artifact@v4
         with:
-          name: GPT-Usage-Tray-v1.0.0
-          path: GPT-Usage-Tray-v1.0.0.zip
+          name: GPT-Usage-Tray-v1.1.0
+          path: GPT-Usage-Tray-v1.1.0.zip
