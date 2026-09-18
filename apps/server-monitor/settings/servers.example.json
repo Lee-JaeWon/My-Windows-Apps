@@ -1,0 +1,10 @@
+{
+  "Servers": [
+    {
+      "Host": "server.example.com",
+      "User": "YOUR_USERNAME",
+      "HostKey": "SHA256:REPLACE_WITH_VERIFIED_HOST_KEY_FINGERPRINT",
+      "PasswordFile": "server1.password.txt"
+    }
+  ]
+}

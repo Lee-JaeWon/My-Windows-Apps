@@ -1,0 +1,22 @@
+# Generated files and dependencies
+/dist/
+**/build/
+**/tools/
+*.exe
+*.dll
+*.pdb
+*.zip
+
+# Private settings and credentials
+**/settings/servers.json
+**/settings/*.txt
+*.password.txt
+.env
+.env.*
+
+# Local diagnostics
+*-check.json
+*-check.png
+*.error.txt
+*.result.txt
+.vs/
