@@ -2,7 +2,7 @@
 
 ## 설치
 
-[최신 설치 파일 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/my-windows-apps-setup-v1.0.1) → **My Windows Apps Setup.exe** 실행 → 원하는 앱 선택 → **선택한 앱 설치**를 누르면 바탕화면에 아이콘이 생성됩니다.
+[최신 설치 파일 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/my-windows-apps-setup-v1.0.2) → **My Windows Apps Setup.exe** 실행 → 원하는 앱 선택 → **선택한 앱 설치**를 누르면 바탕화면에 아이콘이 생성됩니다.
 
 ## 앱
 

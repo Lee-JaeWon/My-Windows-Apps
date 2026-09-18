@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.1.1.0")]
+[assembly: AssemblyVersion("1.1.2.0")]
 
 public class ServerConfig {
     public string Host {get;set;}
@@ -218,6 +218,9 @@ class ServerCard : Control {
     readonly Font smallFont=new Font("맑은 고딕",9);
     readonly Color muted=Color.FromArgb(153,167,188),green=Color.FromArgb(78,220,163),purple=Color.FromArgb(158,139,255);
     public ServerCard(Session source) {session=source;DoubleBuffered=true;BackColor=Color.FromArgb(28,35,48);}
+    public int DesiredHeight {
+        get {var state=session.Snapshot();int gpuCount=state.Data!=null&&state.Data.gpus!=null?state.Data.gpus.Length:0;return Math.Max(464,121+gpuCount*108+120);}
+    }
     void TextAt(Graphics g,string text,Font font,Color color,int x,int y,int width,int height) {
         TextRenderer.DrawText(g,text,font,new Rectangle(x,y,width,height),color,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding);
     }
@@ -267,15 +270,15 @@ class MonitorForm : Form {
         var loginManager=new ToolStripMenuItem("로그인 관리") {ForeColor=Color.White};menu.Items.Add(loginManager);MainMenuStrip=menu;Controls.Add(menu);
         Controls.Add(new Label {Text="Lab Server Monitor",Location=new Point(24,43),Size=new Size(600,42),Font=new Font("Segoe UI",23,FontStyle.Bold)});
         Controls.Add(new Label {Text="1초마다 갱신  ·  GPU 메모리 / 사용률 / 온도 / RAM",Location=new Point(26,91),Size=new Size(600,25),ForeColor=Color.FromArgb(153,167,188)});
-        area.Location=new Point(16,133);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-147);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;Controls.Add(area);
+        area.Location=new Point(16,133);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-147);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;area.FlowDirection=FlowDirection.LeftToRight;area.TabStop=true;Controls.Add(area);
         loginManager.Click+=delegate {using(var manager=new LoginManagerForm(directory)){manager.ShowDialog(this);if(manager.Changed)ReloadServers();}};
         ReloadServers();
-        timer.Tick+=delegate {foreach(var card in cards)card.Invalidate();};timer.Start();
+        timer.Tick+=delegate {foreach(var card in cards){int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Invalidate();}};timer.Start();
         FormClosed+=delegate {timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
     }
     void ReloadServers() {
         foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);
-        foreach(var server in config.Servers){if(server==null)continue;var session=new Session(server,directory);sessions.Add(session);var card=new ServerCard(session){Size=new Size(458,464),Margin=new Padding(8,0,8,12)};cards.Add(card);area.Controls.Add(card);}
+        foreach(var server in config.Servers){if(server==null)continue;var session=new Session(server,directory);sessions.Add(session);var card=new ServerCard(session){Size=new Size(458,464),Margin=new Padding(8,0,8,12)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}
         if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. 상단의 ‘로그인 관리’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Color.FromArgb(190,200,215)});
     }
     public void SaveCheck(string path) {

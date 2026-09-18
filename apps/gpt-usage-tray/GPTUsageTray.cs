@@ -19,7 +19,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("GPT Usage Tray")]
 [assembly: AssemblyProduct("GPT Usage Tray")]
 [assembly: AssemblyDescription("Codex usage in the Windows notification area")]
-[assembly: AssemblyVersion("1.1.1.0")]
+[assembly: AssemblyVersion("1.1.2.0")]
 
 class UsageWindow {
     public string Name;
@@ -244,9 +244,14 @@ class UsageWidgetForm : Form {
         string percent=remaining.HasValue?Math.Round(value).ToString("0")+"%":"?";
         float percentSize=percent.Length>=4?11:14;
         using(var font=new Font("Segoe UI",percentSize,FontStyle.Bold,GraphicsUnit.Pixel))
-        using(var black=new SolidBrush(Color.Black))
-        using(var format=new StringFormat{Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center})g.DrawString(percent,font,black,ring,format);
+        using(var textBrush=new SolidBrush(ReadTaskbarTextColor()))
+        using(var format=new StringFormat{Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center})g.DrawString(percent,font,textBrush,ring,format);
         }return bitmap;
+    }
+
+    static Color ReadTaskbarTextColor() {
+        try {using(var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")){object value=key==null?null:key.GetValue("SystemUsesLightTheme");bool light=value==null||Convert.ToInt32(value)!=0;return light?Color.Black:Color.White;}}
+        catch{return Color.Black;}
     }
 
     void RenderLayered() {
