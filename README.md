@@ -6,6 +6,7 @@
 | --- | --- |
 | **GIF Generator** (v1.4) | MP4 → GIF, MP4 배속 변환 |
 | **Lab Server Monitor** (v1.0.2) | SSH로 서버 GPU·RAM 상태 확인 |
+| **GPT Usage Tray** (v1.0) | Codex Pro 주간 사용량을 작업표시줄에 표시 |
 
 ## GIF Generator
 
@@ -21,6 +22,15 @@
 - 서버에 설치 파일을 남기지 않으며 앱 종료 시 조회 작업을 종료합니다.
 - 서버에는 Python 3와 `nvidia-smi`가 필요합니다. 연결 상태는 SSH 기준이며 물리적 전원 상태를 직접 측정하지 않습니다.
 
+## GPT Usage Tray
+
+- Codex Pro의 주간 잔여 사용량을 Windows 알림 영역에 원형 링과 숫자로 표시합니다.
+- 잔여량이 줄어들수록 링 색상이 초록 → 노랑 → 빨강으로 바뀝니다.
+- 1분마다 갱신하며, 아이콘을 누르면 초기화 시각과 오늘·누적 토큰을 확인할 수 있습니다.
+- Windows 로그인 시 자동 실행되고, 상주 작업 집합은 테스트 PC에서 약 7~17MB였습니다.
+- 설치된 Codex와 ChatGPT 로그인을 사용하므로 API 키가 필요하지 않습니다.
+- [GPT Usage Tray v1.0.0 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/gpt-usage-tray-v1.0.0)
+
 ## 빌드 및 실행
 
 Windows 10/11 64비트에서 PowerShell로 실행합니다.
@@ -29,7 +39,7 @@ Windows 10/11 64비트에서 PowerShell로 실행합니다.
 .\build.ps1
 ```
 
-생성된 실행 파일은 `dist/GIF Generator`와 `dist/Lab Server Monitor`에 있습니다. 별도 실행 의존성을 다음처럼 배치하세요.
+생성된 실행 파일은 `dist` 아래 각 앱 폴더에 있습니다. 별도 실행 의존성을 다음처럼 배치하세요.
 
 ```text
 dist/
@@ -45,6 +55,10 @@ dist/
     settings/
       servers.json
       server1.password.txt
+  GPT Usage Tray/
+    GPT Usage Tray.exe
+    설치.cmd
+    Install.ps1
 ```
 
 - GIF 변환 도구: [FFmpeg Windows 빌드](https://www.gyan.dev/ffmpeg/builds/)
