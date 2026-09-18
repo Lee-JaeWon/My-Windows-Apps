@@ -12,7 +12,7 @@ using System.Reflection;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.0.2.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
 
 public class ServerConfig {
     public string Host {get;set;}
@@ -21,6 +21,83 @@ public class ServerConfig {
     public string PasswordFile {get;set;}
 }
 public class Config {public ServerConfig[] Servers {get;set;}}
+static class ConfigStore {
+    static readonly JavaScriptSerializer Json=new JavaScriptSerializer();
+    public static string ConfigPath(string directory) {return Path.Combine(directory,"servers.json");}
+    public static Config Load(string directory) {
+        string path=ConfigPath(directory);if(!File.Exists(path))return new Config {Servers=new ServerConfig[0]};
+        try {var value=Json.Deserialize<Config>(File.ReadAllText(path,Encoding.UTF8));if(value==null||value.Servers==null)value=new Config {Servers=new ServerConfig[0]};return value;}
+        catch {return new Config {Servers=new ServerConfig[0]};}
+    }
+    public static void Save(string directory,IList<ServerConfig> servers) {
+        Directory.CreateDirectory(directory);
+        var config=new Config {Servers=new List<ServerConfig>(servers).ToArray()};
+        File.WriteAllText(ConfigPath(directory),Json.Serialize(config),new UTF8Encoding(false));
+    }
+    public static void MigrateExisting(string directory) {
+        Directory.CreateDirectory(directory);if(File.Exists(ConfigPath(directory)))return;
+        string oldDirectory=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"settings");string oldConfig=ConfigPath(oldDirectory);
+        if(!File.Exists(oldConfig))return;
+        File.Copy(oldConfig,ConfigPath(directory),true);
+        var config=Load(directory);foreach(var server in config.Servers) {
+            if(server==null||string.IsNullOrWhiteSpace(server.PasswordFile))continue;
+            string source=Path.Combine(oldDirectory,server.PasswordFile),target=Path.Combine(directory,server.PasswordFile);
+            if(File.Exists(source)&&!File.Exists(target))File.Copy(source,target);
+        }
+    }
+}
+
+class LoginManagerForm : Form {
+    readonly string directory;readonly List<ServerConfig> servers=new List<ServerConfig>();
+    readonly ListBox list=new ListBox();readonly TextBox host=new TextBox(),user=new TextBox(),password=new TextBox(),hostKey=new TextBox();
+    int selected=-1;public bool Changed {get;private set;}
+    public LoginManagerForm(string configDirectory) {
+        directory=configDirectory;Text="로그인 관리";ClientSize=new Size(720,430);MinimumSize=MaximumSize=Size;StartPosition=FormStartPosition.CenterParent;
+        FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;BackColor=Color.FromArgb(17,23,33);ForeColor=Color.White;Font=new Font("맑은 고딕",10);
+        Controls.Add(new Label {Text="저장된 로그인",Location=new Point(20,18),Size=new Size(220,26),Font=new Font("맑은 고딕",12,FontStyle.Bold)});
+        list.Location=new Point(20,52);list.Size=new Size(235,292);list.BackColor=Color.FromArgb(29,37,51);list.ForeColor=Color.White;list.BorderStyle=BorderStyle.FixedSingle;Controls.Add(list);
+        var add=new Button {Text="새 로그인",Location=new Point(20,356),Size=new Size(112,38)};var remove=new Button {Text="삭제",Location=new Point(143,356),Size=new Size(112,38)};Controls.Add(add);Controls.Add(remove);
+        int x=286;AddLabel("서버 주소",x,24);host.SetBounds(x,50,402,30);Controls.Add(host);
+        AddLabel("사용자 이름",x,91);user.SetBounds(x,117,402,30);Controls.Add(user);
+        AddLabel("비밀번호",x,158);password.SetBounds(x,184,330,30);password.UseSystemPasswordChar=true;Controls.Add(password);
+        var showPassword=new CheckBox {Text="표시",Location=new Point(626,186),Size=new Size(62,28),ForeColor=Color.White};Controls.Add(showPassword);
+        AddLabel("SSH 서버 키 지문",x,225);hostKey.SetBounds(x,251,402,30);Controls.Add(hostKey);
+        Controls.Add(new Label {Text="예: SHA256:...  서버 관리자에게 확인한 지문을 입력하세요.",Location=new Point(x,286),Size=new Size(402,25),ForeColor=Color.FromArgb(153,167,188)});
+        var save=new Button {Text="저장",Location=new Point(486,356),Size=new Size(96,38),BackColor=Color.FromArgb(91,76,219),ForeColor=Color.White,FlatStyle=FlatStyle.Flat};save.FlatAppearance.BorderSize=0;Controls.Add(save);
+        var close=new Button {Text="닫기",Location=new Point(592,356),Size=new Size(96,38)};Controls.Add(close);
+        list.SelectedIndexChanged+=delegate {LoadSelected();};add.Click+=delegate {ClearFields();};remove.Click+=delegate {RemoveSelected();};
+        save.Click+=delegate {SaveCurrent();};close.Click+=delegate {Close();};showPassword.CheckedChanged+=delegate {password.UseSystemPasswordChar=!showPassword.Checked;};
+        LoadList();
+    }
+    void AddLabel(string text,int x,int y){Controls.Add(new Label {Text=text,Location=new Point(x,y),Size=new Size(402,24),ForeColor=Color.FromArgb(190,200,215)});}
+    void LoadList() {
+        servers.Clear();servers.AddRange(ConfigStore.Load(directory).Servers);list.Items.Clear();
+        foreach(var server in servers)list.Items.Add(server.Host+"  ·  "+server.User);
+        if(list.Items.Count>0)list.SelectedIndex=0;else ClearFields();
+    }
+    void LoadSelected() {
+        selected=list.SelectedIndex;if(selected<0||selected>=servers.Count)return;var item=servers[selected];
+        host.Text=item.Host??"";user.Text=item.User??"";hostKey.Text=item.HostKey??"";password.Text="";
+        if(!string.IsNullOrWhiteSpace(item.PasswordFile)){string path=Path.Combine(directory,item.PasswordFile);if(File.Exists(path))password.Text=File.ReadAllText(path);}
+    }
+    void ClearFields(){list.ClearSelected();selected=-1;host.Text="";user.Text="";password.Text="";hostKey.Text="";host.Focus();}
+    void SaveCurrent() {
+        string hostValue=host.Text.Trim(),userValue=user.Text.Trim(),keyValue=hostKey.Text.Trim();
+        if(hostValue.Length==0||userValue.Length==0||password.Text.Length==0||keyValue.Length==0){MessageBox.Show(this,"서버 주소, 사용자 이름, 비밀번호, 서버 키 지문을 모두 입력해 주세요.","로그인 관리");return;}
+        ServerConfig item;
+        if(selected>=0&&selected<servers.Count)item=servers[selected];else {item=new ServerConfig {PasswordFile="login-"+Guid.NewGuid().ToString("N")+".password.txt"};servers.Add(item);selected=servers.Count-1;}
+        int savedIndex=selected;
+        item.Host=hostValue;item.User=userValue;item.HostKey=keyValue;Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,item.PasswordFile),password.Text,new UTF8Encoding(false));
+        ConfigStore.Save(directory,servers);Changed=true;LoadList();if(list.Items.Count>0)list.SelectedIndex=Math.Min(savedIndex,list.Items.Count-1);
+    }
+    void RemoveSelected() {
+        if(selected<0||selected>=servers.Count)return;var item=servers[selected];
+        if(MessageBox.Show(this,"이 로그인을 삭제할까요?", "로그인 관리",MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
+        servers.RemoveAt(selected);ConfigStore.Save(directory,servers);
+        if(!string.IsNullOrWhiteSpace(item.PasswordFile)){string path=Path.Combine(directory,item.PasswordFile);if(File.Exists(path))File.Delete(path);}
+        Changed=true;LoadList();
+    }
+}
 public class Gpu {
     public string index {get;set;} public string name {get;set;}
     public double? used {get;set;} public double? total {get;set;}
@@ -146,17 +223,25 @@ class ServerCard : Control {
 class MonitorForm : Form {
     readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer {Interval=1000};
     readonly List<Session> sessions=new List<Session>();readonly List<ServerCard> cards=new List<ServerCard>();
-    readonly FlowLayoutPanel area=new FlowLayoutPanel();
-    public MonitorForm(Config config,string directory) {
-        Text="Lab Server Monitor";ClientSize=new Size(980,610);MinimumSize=new Size(800,640);StartPosition=FormStartPosition.CenterScreen;
+    readonly FlowLayoutPanel area=new FlowLayoutPanel();readonly string directory;
+    public MonitorForm(string configDirectory) {
+        directory=configDirectory;Text="Lab Server Monitor";ClientSize=new Size(980,640);MinimumSize=new Size(800,670);StartPosition=FormStartPosition.CenterScreen;
         BackColor=Color.FromArgb(17,23,33);ForeColor=Color.White;Font=new Font("맑은 고딕",10);AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        Controls.Add(new Label {Text="Lab Server Monitor",Location=new Point(24,18),Size=new Size(600,42),Font=new Font("Segoe UI",23,FontStyle.Bold)});
-        Controls.Add(new Label {Text="1초마다 갱신  ·  GPU 메모리 / 사용률 / 온도 / RAM",Location=new Point(26,66),Size=new Size(600,25),ForeColor=Color.FromArgb(153,167,188)});
-        area.Location=new Point(16,108);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-122);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;Controls.Add(area);
-        foreach(var server in config.Servers){var session=new Session(server,directory);sessions.Add(session);var card=new ServerCard(session){Size=new Size(458,464),Margin=new Padding(8,0,8,12)};cards.Add(card);area.Controls.Add(card);}
+        var menu=new MenuStrip {BackColor=Color.FromArgb(24,31,43),ForeColor=Color.White,GripStyle=ToolStripGripStyle.Hidden};
+        var loginManager=new ToolStripMenuItem("로그인 관리") {ForeColor=Color.White};menu.Items.Add(loginManager);MainMenuStrip=menu;Controls.Add(menu);
+        Controls.Add(new Label {Text="Lab Server Monitor",Location=new Point(24,43),Size=new Size(600,42),Font=new Font("Segoe UI",23,FontStyle.Bold)});
+        Controls.Add(new Label {Text="1초마다 갱신  ·  GPU 메모리 / 사용률 / 온도 / RAM",Location=new Point(26,91),Size=new Size(600,25),ForeColor=Color.FromArgb(153,167,188)});
+        area.Location=new Point(16,133);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-147);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;Controls.Add(area);
+        loginManager.Click+=delegate {using(var manager=new LoginManagerForm(directory)){manager.ShowDialog(this);if(manager.Changed)ReloadServers();}};
+        ReloadServers();
         timer.Tick+=delegate {foreach(var card in cards)card.Invalidate();};timer.Start();
         FormClosed+=delegate {timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
+    }
+    void ReloadServers() {
+        foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);
+        foreach(var server in config.Servers){if(server==null)continue;var session=new Session(server,directory);sessions.Add(session);var card=new ServerCard(session){Size=new Size(458,464),Margin=new Padding(8,0,8,12)};cards.Add(card);area.Controls.Add(card);}
+        if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. 상단의 ‘로그인 관리’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Color.FromArgb(190,200,215)});
     }
     public void SaveCheck(string path) {
         var states=new List<object>();
@@ -177,16 +262,15 @@ class Program {
         using(var instance=new Mutex(true,"Local\\LabServerMonitor-jw",out first)) {
         if(!first) {var window=FindWindow(null,"Lab Server Monitor");if(window!=IntPtr.Zero){ShowWindowAsync(window,9);SetForegroundWindow(window);}return 0;}
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
-        // Keep this private installation's settings with the executable so launching
-        // from Explorer uses the same files as launching from a terminal.
-        string directory=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"settings");
-        if(!File.Exists(Path.Combine(directory,"servers.json")))
-            directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LabServerMonitor");
+        if(args.Length==2&&args[0]=="--login-ui-test") {
+            string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
+            try {using(var form=new LoginManagerForm(previewDirectory)){form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}}
+            catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}return 0;
+        }
+        string directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LabServerMonitor");
         try {
-            if(!File.Exists(Path.Combine(directory,"servers.json")))throw new Exception("서버 설정 파일이 없습니다. 앱 폴더의 settings\\servers.json을 확인해 주세요.");
-            var config=new JavaScriptSerializer().Deserialize<Config>(File.ReadAllText(Path.Combine(directory,"servers.json")));
-            if(config==null||config.Servers==null||config.Servers.Length==0)throw new Exception("서버 설정이 없습니다.");
-            using(var form=new MonitorForm(config,directory)) {
+            ConfigStore.MigrateExisting(directory);
+            using(var form=new MonitorForm(directory)) {
                 if(args.Length==2&&args[0]=="--check") {
                     var finish=new System.Windows.Forms.Timer {Interval=10000};
                     finish.Tick+=delegate {finish.Stop();finish.Dispose();form.SaveCheck(args[1]);form.Close();};finish.Start();

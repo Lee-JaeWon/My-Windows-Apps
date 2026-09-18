@@ -1,5 +1,7 @@
 # Generated files and dependencies
 /dist/
+/installer/staging/
+/release/
 **/build/
 **/tools/
 *.exe
