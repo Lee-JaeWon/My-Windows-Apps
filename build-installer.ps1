@@ -1,7 +1,7 @@
 param(
-    [string]$FFmpegDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\Gif50\tools'),
+    [string]$FFmpegDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\GIFGenerator\tools'),
     [string]$PlinkPath = (Join-Path $env:LOCALAPPDATA 'Programs\LabServerMonitor\plink.exe'),
-    [string]$FFmpegLicensePath = (Join-Path $env:LOCALAPPDATA 'Programs\Gif50\FFmpeg-LICENSE.txt'),
+    [string]$FFmpegLicensePath = (Join-Path $env:LOCALAPPDATA 'Programs\GIFGenerator\FFmpeg-LICENSE.txt'),
     [string]$PuttyLicensePath
 )
 $ErrorActionPreference = 'Stop'
