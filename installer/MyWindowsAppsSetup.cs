@@ -12,7 +12,7 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("My Windows Apps Setup")]
 [assembly: AssemblyProduct("My Windows Apps")]
 [assembly: AssemblyDescription("Installer for GIF Generator, Lab Server Monitor and GPT Usage Tray")]
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
 
 class SetupForm : Form {
     readonly CheckBox gif=new CheckBox(),monitor=new CheckBox(),usage=new CheckBox();

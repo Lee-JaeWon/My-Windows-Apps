@@ -6,13 +6,15 @@ using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Web.Script.Serialization;
 using System.Reflection;
+using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.1.1.0")]
 
 public class ServerConfig {
     public string Host {get;set;}
@@ -47,6 +49,28 @@ static class ConfigStore {
     }
 }
 
+static class HostKeyLookup {
+    public static string Fetch(string host,string user,string password) {
+        string plink=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"plink.exe");if(!File.Exists(plink))throw new FileNotFoundException("Plink를 찾을 수 없습니다.",plink);
+        string passwordFile=Path.Combine(Path.GetTempPath(),"LabServerMonitor-"+Guid.NewGuid().ToString("N")+".password.txt");
+        try {
+            File.WriteAllText(passwordFile,password,new UTF8Encoding(false));
+            using(var process=new Process()) {
+                process.StartInfo=new ProcessStartInfo(plink,"-ssh -v -batch -T -noagent -l "+Q(user)+" -pwfile "+Q(passwordFile)+" "+Q(host)+" exit") {
+                    UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8
+                };
+                process.Start();Task<string> output=process.StandardOutput.ReadToEndAsync(),error=process.StandardError.ReadToEndAsync();
+                if(!process.WaitForExit(15000)){try{process.Kill();}catch{}throw new TimeoutException("서버 연결 시간이 초과되었습니다.");}
+                Task.WaitAll(output,error);string text=output.Result+Environment.NewLine+error.Result;
+                Match match=Regex.Match(text,@"SHA256:[A-Za-z0-9+/]{20,}={0,2}");if(match.Success)return match.Value;
+                if(text.IndexOf("Network error",StringComparison.OrdinalIgnoreCase)>=0)throw new Exception("서버에 연결할 수 없습니다. 주소와 네트워크를 확인해 주세요.");
+                throw new Exception("SSH 서버 키 지문을 찾지 못했습니다.");
+            }
+        } finally {try{if(File.Exists(passwordFile))File.Delete(passwordFile);}catch{}}
+    }
+    static string Q(string value){return "\""+(value??"").Replace("\"","\\\"")+"\"";}
+}
+
 class LoginManagerForm : Form {
     readonly string directory;readonly List<ServerConfig> servers=new List<ServerConfig>();
     readonly ListBox list=new ListBox();readonly TextBox host=new TextBox(),user=new TextBox(),password=new TextBox(),hostKey=new TextBox();
@@ -61,12 +85,13 @@ class LoginManagerForm : Form {
         AddLabel("사용자 이름",x,91);user.SetBounds(x,117,402,30);Controls.Add(user);
         AddLabel("비밀번호",x,158);password.SetBounds(x,184,330,30);password.UseSystemPasswordChar=true;Controls.Add(password);
         var showPassword=new CheckBox {Text="표시",Location=new Point(626,186),Size=new Size(62,28),ForeColor=Color.White};Controls.Add(showPassword);
-        AddLabel("SSH 서버 키 지문",x,225);hostKey.SetBounds(x,251,402,30);Controls.Add(hostKey);
+        AddLabel("SSH 서버 키 지문",x,225);hostKey.SetBounds(x,251,292,30);Controls.Add(hostKey);
+        var lookup=new Button {Text="지문 조회",Location=new Point(588,249),Size=new Size(100,34)};Controls.Add(lookup);
         Controls.Add(new Label {Text="예: SHA256:...  서버 관리자에게 확인한 지문을 입력하세요.",Location=new Point(x,286),Size=new Size(402,25),ForeColor=Color.FromArgb(153,167,188)});
         var save=new Button {Text="저장",Location=new Point(486,356),Size=new Size(96,38),BackColor=Color.FromArgb(91,76,219),ForeColor=Color.White,FlatStyle=FlatStyle.Flat};save.FlatAppearance.BorderSize=0;Controls.Add(save);
         var close=new Button {Text="닫기",Location=new Point(592,356),Size=new Size(96,38)};Controls.Add(close);
         list.SelectedIndexChanged+=delegate {LoadSelected();};add.Click+=delegate {ClearFields();};remove.Click+=delegate {RemoveSelected();};
-        save.Click+=delegate {SaveCurrent();};close.Click+=delegate {Close();};showPassword.CheckedChanged+=delegate {password.UseSystemPasswordChar=!showPassword.Checked;};
+        save.Click+=delegate {SaveCurrent();};close.Click+=delegate {Close();};lookup.Click+=delegate {LookupHostKey(lookup);};showPassword.CheckedChanged+=delegate {password.UseSystemPasswordChar=!showPassword.Checked;};
         LoadList();
     }
     void AddLabel(string text,int x,int y){Controls.Add(new Label {Text=text,Location=new Point(x,y),Size=new Size(402,24),ForeColor=Color.FromArgb(190,200,215)});}
@@ -96,6 +121,16 @@ class LoginManagerForm : Form {
         servers.RemoveAt(selected);ConfigStore.Save(directory,servers);
         if(!string.IsNullOrWhiteSpace(item.PasswordFile)){string path=Path.Combine(directory,item.PasswordFile);if(File.Exists(path))File.Delete(path);}
         Changed=true;LoadList();
+    }
+    void LookupHostKey(Button button) {
+        string hostValue=host.Text.Trim(),userValue=user.Text.Trim(),passwordValue=password.Text;
+        if(hostValue.Length==0||userValue.Length==0||passwordValue.Length==0){MessageBox.Show(this,"서버 주소, 사용자 이름, 비밀번호를 먼저 입력해 주세요.","지문 조회");return;}
+        button.Enabled=false;button.Text="조회 중…";
+        Task.Run(delegate{return HostKeyLookup.Fetch(hostValue,userValue,passwordValue);}).ContinueWith(task=>BeginInvoke((Action)delegate {
+            button.Enabled=true;button.Text="지문 조회";
+            if(task.IsFaulted)MessageBox.Show(this,task.Exception.GetBaseException().Message,"지문 조회 실패",MessageBoxButtons.OK,MessageBoxIcon.Error);
+            else {hostKey.Text=task.Result;MessageBox.Show(this,"SSH 서버 키 지문을 가져왔습니다. 저장을 눌러 완료하세요.","지문 조회");}
+        }));
     }
 }
 public class Gpu {
@@ -270,6 +305,11 @@ class Program {
         string directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LabServerMonitor");
         try {
             ConfigStore.MigrateExisting(directory);
+            if(args.Length==2&&args[0]=="--fingerprint-test") {
+                var config=ConfigStore.Load(directory);if(config.Servers.Length==0)throw new Exception("테스트할 로그인이 없습니다.");var server=config.Servers[0];
+                string savedPassword=File.ReadAllText(Path.Combine(directory,server.PasswordFile));string fingerprint=HostKeyLookup.Fetch(server.Host,server.User,savedPassword);
+                File.WriteAllText(args[1],"matched="+string.Equals(fingerprint,server.HostKey,StringComparison.Ordinal));return 0;
+            }
             using(var form=new MonitorForm(directory)) {
                 if(args.Length==2&&args[0]=="--check") {
                     var finish=new System.Windows.Forms.Timer {Interval=10000};
@@ -279,7 +319,7 @@ class Program {
             }
             return 0;
         } catch(Exception ex) {
-            if(args.Length==2&&args[0]=="--check")File.WriteAllText(args[1]+".error.txt",ex.Message);
+            if(args.Length==2&&(args[0]=="--check"||args[0]=="--fingerprint-test"))File.WriteAllText(args[1]+".error.txt",ex.Message);
             else MessageBox.Show("앱을 시작하지 못했습니다.\n"+ex.Message,"Lab Server Monitor");
             return 1;
         }
