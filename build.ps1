@@ -22,7 +22,8 @@ Copy-Item -LiteralPath (Join-Path $monitorSource 'collector.sh') -Destination $m
 Copy-Item -LiteralPath (Join-Path $monitorSource 'settings\servers.example.json') -Destination (Join-Path $monitorOutput 'settings') -Force
 & $compiler /nologo /target:winexe /optimize+ @references "/out:$usageOutput\GPT Usage Tray.exe" "/win32icon:$usageSource\gpt-usage.ico" "$usageSource\GPTUsageTray.cs"
 if ($LASTEXITCODE -ne 0) { throw 'GPT Usage Tray build failed.' }
-Copy-Item -LiteralPath (Join-Path $usageSource 'gpt-usage.ico'), (Join-Path $usageSource 'README.md'), (Join-Path $usageSource 'Install.ps1'), (Join-Path $usageSource '설치.cmd') -Destination $usageOutput -Force
+Copy-Item -LiteralPath (Join-Path $usageSource 'gpt-usage.ico'), (Join-Path $usageSource 'README.md'), (Join-Path $usageSource 'Install.ps1') -Destination $usageOutput -Force
+Get-ChildItem -LiteralPath $usageSource -Filter '*.cmd' | Copy-Item -Destination $usageOutput -Force
 
 if ($FFmpegDirectory) {
     foreach ($name in @('ffmpeg.exe', 'ffprobe.exe')) {
