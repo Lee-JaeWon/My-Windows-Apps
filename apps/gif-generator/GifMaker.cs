@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: AssemblyTitle("GIF Generator")]
 [assembly: AssemblyProduct("GIF Generator")]
 [assembly: AssemblyDescription("MP4 to GIF and MP4 speed converter")]
-[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyVersion("1.5.1.0")]
 
 static class GUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -180,7 +180,6 @@ class MainForm : Form {
     public MainForm() {
         Text="GIF Generator"; ClientSize=new Size(660,520); MinimumSize=MaximumSize=Size; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; StartPosition=FormStartPosition.CenterScreen; BackColor=bg; ForeColor=GUi.Text; Font=new Font("맑은 고딕",10); AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        AddDot(Color.FromArgb(255,95,86),28);AddDot(Color.FromArgb(255,189,46),48);AddDot(Color.FromArgb(39,201,63),68);
         Label title=LabelAt("GIF Generator",28,22,440,48,26,Color.White); title.Font=new Font(Font.FontFamily,26,FontStyle.Bold);
         Label credit=LabelAt("Created by jw",480,34,150,20,9,Color.White); credit.TextAlign=ContentAlignment.MiddleRight; credit.BringToFront();
         LabelAt("GIF 만들기와 MP4 배속 변환을 한곳에서",30,76,600,28,12,muted);
@@ -213,7 +212,6 @@ class MainForm : Form {
     }
     void SelectTab(int index){if(busy||speedPanel.Busy)return;activeTab=index;gifPage.Visible=index==0;speedPage.Visible=index==1;gifTabButton.BackColor=index==0?GUi.Accent:GUi.Surface2;speedTabButton.BackColor=index==1?GUi.Accent:GUi.Surface2;gifTabButton.ForeColor=index==0?Color.FromArgb(15,26,18):GUi.Muted;speedTabButton.ForeColor=index==1?Color.FromArgb(15,26,18):GUi.Muted;}
     public void SelectSpeedTab(){SelectTab(1);}
-    void AddDot(Color color,int x){var dot=new Panel {BackColor=bg,Location=new Point(x,13),Size=new Size(10,10)};dot.Paint+=delegate(object s,PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var b=new SolidBrush(color))e.Graphics.FillEllipse(b,0,0,9,9);};Controls.Add(dot);}
     Label LabelAt(string text,int x,int y,int w,int h,int size,Color color) {var l=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=color};Controls.Add(l);return l;}
     Button ButtonAt(string text,int x,int y,int w,int h,bool primary) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(w,h)};GUi.Button(b,primary?GUi.Accent:panel);Controls.Add(b);return b;}
     void EnterFile(object s,DragEventArgs e) {e.Effect=!busy&&!speedPanel.Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;}

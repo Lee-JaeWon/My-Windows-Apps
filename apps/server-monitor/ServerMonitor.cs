@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
 
 static class Ui {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
@@ -288,7 +288,6 @@ class MonitorForm : Form {
     public MonitorForm(string configDirectory):this(configDirectory,null){}
     public MonitorForm(string configDirectory,Sample preview) {
         directory=configDirectory;previewData=preview;Text="Lab Server Monitor";ClientSize=new Size(1000,680);MinimumSize=new Size(820,670);StartPosition=FormStartPosition.CenterScreen;BackColor=Ui.Background;ForeColor=Ui.Text;Font=new Font("맑은 고딕",10);AutoScaleMode=AutoScaleMode.Dpi;Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        AddDot(Color.FromArgb(255,95,86),24);AddDot(Color.FromArgb(255,189,46),44);AddDot(Color.FromArgb(39,201,63),64);
         Controls.Add(new Label {Text="Lab Server Monitor",Location=new Point(24,43),Size=new Size(560,42),Font=new Font("Segoe UI",23,FontStyle.Bold)});
         Controls.Add(new Label {Text="GPU와 RAM 상태를 1초마다 확인합니다",Location=new Point(26,87),Size=new Size(560,25),ForeColor=Ui.Muted});
         var loginManager=new Button {Text="로그인 관리",Size=new Size(116,36),Location=new Point(ClientSize.Width-140,32),Anchor=AnchorStyles.Top|AnchorStyles.Right};Ui.StyleButton(loginManager,Ui.Surface2);Controls.Add(loginManager);
@@ -297,7 +296,6 @@ class MonitorForm : Form {
         loginManager.Click+=delegate {using(var manager=new LoginManagerForm(directory)){manager.ShowDialog(this);if(manager.Changed)ReloadServers();}};toggle.ModeChanged+=delegate {mode=toggle.Mode;SaveMode();LayoutCards();};area.Resize+=delegate {LayoutCards();};
         LoadMode();ReloadServers();timer.Tick+=delegate {LayoutCards();foreach(var card in cards)card.Invalidate();};timer.Start();FormClosed+=delegate {timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
     }
-    void AddDot(Color color,int x){var dot=new Panel {BackColor=color,Location=new Point(x,18),Size=new Size(10,10)};dot.Paint+=delegate(object s,PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var b=new SolidBrush(color))e.Graphics.FillEllipse(b,0,0,9,9);};Controls.Add(dot);}
     string ModePath {get{return Path.Combine(directory,"view-mode.txt");}}
     void LoadMode(){try{if(File.Exists(ModePath)&&File.ReadAllText(ModePath).Trim()=="One")mode=ServerViewMode.One;}catch{}toggle.Mode=mode;}
     void SaveMode(){try{Directory.CreateDirectory(directory);File.WriteAllText(ModePath,mode.ToString());}catch{}}
