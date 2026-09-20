@@ -14,7 +14,37 @@ using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.1.2.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+
+static class Ui {
+    public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
+    public static readonly Color Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126), Track=Color.FromArgb(55,68,59);
+    public static GraphicsPath Round(Rectangle r,int radius) {
+        var p=new GraphicsPath();int d=radius*2;
+        p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;
+    }
+    public static void StyleButton(Button b,Color color) {b.FlatStyle=FlatStyle.Flat;b.FlatAppearance.BorderSize=0;b.BackColor=color;b.ForeColor=Text;b.Cursor=Cursors.Hand;using(var p=Round(new Rectangle(0,0,b.Width,b.Height),10))b.Region=new Region(p);b.Resize+=delegate {using(var p=Round(new Rectangle(0,0,b.Width,b.Height),10))b.Region=new Region(p);};}
+    public static void StyleTextBox(TextBox box) {box.BackColor=Surface2;box.ForeColor=Text;box.BorderStyle=BorderStyle.FixedSingle;}
+}
+
+class RoundedPanel : Panel {
+    public Color FillColor=Ui.Surface;public int Radius=16;
+    public RoundedPanel(){DoubleBuffered=true;BackColor=Ui.Background;}
+    protected override void OnPaintBackground(PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var p=Ui.Round(new Rectangle(0,0,Width-1,Height-1),Radius))using(var b=new SolidBrush(FillColor))e.Graphics.FillPath(b,p);}
+}
+
+enum ServerViewMode { List, One }
+
+class ModeToggle : Control {
+    ServerViewMode mode=ServerViewMode.List;readonly Font font=new Font("Segoe UI",9,FontStyle.Bold);
+    public event EventHandler ModeChanged;
+    public ServerViewMode Mode {get{return mode;}set{if(mode==value)return;mode=value;Invalidate();if(ModeChanged!=null)ModeChanged(this,EventArgs.Empty);}}
+    public ModeToggle(){Size=new Size(164,36);DoubleBuffered=true;Cursor=Cursors.Hand;BackColor=Ui.Background;}
+    protected override void OnMouseUp(MouseEventArgs e){Mode=e.X<Width/2?ServerViewMode.List:ServerViewMode.One;base.OnMouseUp(e);}
+    protected override void OnPaint(PaintEventArgs e){var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;using(var p=Ui.Round(new Rectangle(0,0,Width-1,Height-1),12))using(var b=new SolidBrush(Ui.Surface))g.FillPath(b,p);int x=mode==ServerViewMode.List?3:Width/2;using(var p=Ui.Round(new Rectangle(x,3,Width/2-3,Height-6),10))using(var b=new SolidBrush(Ui.Accent))g.FillPath(b,p);Draw(g,"List",new Rectangle(0,0,Width/2,Height),mode==ServerViewMode.List?Color.FromArgb(15,26,18):Ui.Muted);Draw(g,"One",new Rectangle(Width/2,0,Width/2,Height),mode==ServerViewMode.One?Color.FromArgb(15,26,18):Ui.Muted);}
+    void Draw(Graphics g,string text,Rectangle r,Color color){TextRenderer.DrawText(g,text,font,r,color,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPadding);}
+    protected override void Dispose(bool disposing){if(disposing)font.Dispose();base.Dispose(disposing);}
+}
 
 public class ServerConfig {
     public string Host {get;set;}
@@ -77,24 +107,24 @@ class LoginManagerForm : Form {
     int selected=-1;public bool Changed {get;private set;}
     public LoginManagerForm(string configDirectory) {
         directory=configDirectory;Text="로그인 관리";ClientSize=new Size(720,430);MinimumSize=MaximumSize=Size;StartPosition=FormStartPosition.CenterParent;
-        FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;BackColor=Color.FromArgb(17,23,33);ForeColor=Color.White;Font=new Font("맑은 고딕",10);
+        FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;BackColor=Ui.Background;ForeColor=Ui.Text;Font=new Font("맑은 고딕",10);
         Controls.Add(new Label {Text="저장된 로그인",Location=new Point(20,18),Size=new Size(220,26),Font=new Font("맑은 고딕",12,FontStyle.Bold)});
-        list.Location=new Point(20,52);list.Size=new Size(235,292);list.BackColor=Color.FromArgb(29,37,51);list.ForeColor=Color.White;list.BorderStyle=BorderStyle.FixedSingle;Controls.Add(list);
-        var add=new Button {Text="새 로그인",Location=new Point(20,356),Size=new Size(112,38)};var remove=new Button {Text="삭제",Location=new Point(143,356),Size=new Size(112,38)};Controls.Add(add);Controls.Add(remove);
-        int x=286;AddLabel("서버 주소",x,24);host.SetBounds(x,50,402,30);Controls.Add(host);
-        AddLabel("사용자 이름",x,91);user.SetBounds(x,117,402,30);Controls.Add(user);
-        AddLabel("비밀번호",x,158);password.SetBounds(x,184,330,30);password.UseSystemPasswordChar=true;Controls.Add(password);
+        list.Location=new Point(20,52);list.Size=new Size(235,292);list.BackColor=Ui.Surface;list.ForeColor=Ui.Text;list.BorderStyle=BorderStyle.None;list.ItemHeight=30;Controls.Add(list);
+        var add=new Button {Text="새 로그인",Location=new Point(20,356),Size=new Size(112,38)};var remove=new Button {Text="삭제",Location=new Point(143,356),Size=new Size(112,38)};Ui.StyleButton(add,Ui.Surface2);Ui.StyleButton(remove,Color.FromArgb(102,55,59));Controls.Add(add);Controls.Add(remove);
+        int x=286;AddLabel("서버 주소",x,24);host.SetBounds(x,50,402,30);Ui.StyleTextBox(host);Controls.Add(host);
+        AddLabel("사용자 이름",x,91);user.SetBounds(x,117,402,30);Ui.StyleTextBox(user);Controls.Add(user);
+        AddLabel("비밀번호",x,158);password.SetBounds(x,184,330,30);password.UseSystemPasswordChar=true;Ui.StyleTextBox(password);Controls.Add(password);
         var showPassword=new CheckBox {Text="표시",Location=new Point(626,186),Size=new Size(62,28),ForeColor=Color.White};Controls.Add(showPassword);
-        AddLabel("SSH 서버 키 지문",x,225);hostKey.SetBounds(x,251,292,30);Controls.Add(hostKey);
-        var lookup=new Button {Text="지문 조회",Location=new Point(588,249),Size=new Size(100,34)};Controls.Add(lookup);
+        AddLabel("SSH 서버 키 지문",x,225);hostKey.SetBounds(x,251,292,30);Ui.StyleTextBox(hostKey);Controls.Add(hostKey);
+        var lookup=new Button {Text="지문 조회",Location=new Point(588,249),Size=new Size(100,34)};Ui.StyleButton(lookup,Ui.Surface2);Controls.Add(lookup);
         Controls.Add(new Label {Text="예: SHA256:...  서버 관리자에게 확인한 지문을 입력하세요.",Location=new Point(x,286),Size=new Size(402,25),ForeColor=Color.FromArgb(153,167,188)});
-        var save=new Button {Text="저장",Location=new Point(486,356),Size=new Size(96,38),BackColor=Color.FromArgb(91,76,219),ForeColor=Color.White,FlatStyle=FlatStyle.Flat};save.FlatAppearance.BorderSize=0;Controls.Add(save);
-        var close=new Button {Text="닫기",Location=new Point(592,356),Size=new Size(96,38)};Controls.Add(close);
+        var save=new Button {Text="저장",Location=new Point(486,356),Size=new Size(96,38)};Ui.StyleButton(save,Ui.Accent);Controls.Add(save);
+        var close=new Button {Text="닫기",Location=new Point(592,356),Size=new Size(96,38)};Ui.StyleButton(close,Ui.Surface2);Controls.Add(close);
         list.SelectedIndexChanged+=delegate {LoadSelected();};add.Click+=delegate {ClearFields();};remove.Click+=delegate {RemoveSelected();};
         save.Click+=delegate {SaveCurrent();};close.Click+=delegate {Close();};lookup.Click+=delegate {LookupHostKey(lookup);};showPassword.CheckedChanged+=delegate {password.UseSystemPasswordChar=!showPassword.Checked;};
         LoadList();
     }
-    void AddLabel(string text,int x,int y){Controls.Add(new Label {Text=text,Location=new Point(x,y),Size=new Size(402,24),ForeColor=Color.FromArgb(190,200,215)});}
+    void AddLabel(string text,int x,int y){Controls.Add(new Label {Text=text,Location=new Point(x,y),Size=new Size(402,24),ForeColor=Ui.Muted});}
     void LoadList() {
         servers.Clear();servers.AddRange(ConfigStore.Load(directory).Servers);list.Items.Clear();
         foreach(var server in servers)list.Items.Add(server.Host+"  ·  "+server.User);
@@ -160,6 +190,9 @@ class Session : IDisposable {
         Config=config;configDirectory=directory;
         worker=new Thread(Work) {IsBackground=true,Name="Monitor "+config.Host};worker.Start();
     }
+    public Session(ServerConfig config,Sample preview) {
+        Config=config;configDirectory="";worker=null;current.Data=preview;current.Received=DateTime.UtcNow;current.Connected=true;current.State="연결됨";
+    }
     static string Q(string s) {return "\""+s+"\"";}
     public ViewState Snapshot() {lock(gate)return new ViewState {Data=current.Data,Received=current.Received,State=current.State,Connected=current.Connected,Updates=current.Updates};}
     void SetState(string state,bool connected) {lock(gate){current.State=state;current.Connected=connected;if(!connected)current.Data=null;}}
@@ -207,86 +240,72 @@ class Session : IDisposable {
     }
     public void Dispose() {
         stop.Set();lock(gate){if(active!=null)try{active.Kill();}catch{}}
-        if(worker.Join(3000))stop.Dispose();
+        if(worker==null||worker.Join(3000))stop.Dispose();
     }
 }
 class ServerCard : Control {
-    readonly Session session;
-    readonly Font hostFont=new Font("Segoe UI",16,FontStyle.Bold);
-    readonly Font labelFont=new Font("Segoe UI",10);
-    readonly Font valueFont=new Font("Segoe UI",15,FontStyle.Bold);
-    readonly Font smallFont=new Font("맑은 고딕",9);
-    readonly Color muted=Color.FromArgb(153,167,188),green=Color.FromArgb(78,220,163),purple=Color.FromArgb(158,139,255);
-    public ServerCard(Session source) {session=source;DoubleBuffered=true;BackColor=Color.FromArgb(28,35,48);}
-    public int DesiredHeight {
-        get {var state=session.Snapshot();int gpuCount=state.Data!=null&&state.Data.gpus!=null?state.Data.gpus.Length:0;return Math.Max(464,121+gpuCount*108+120);}
-    }
-    void TextAt(Graphics g,string text,Font font,Color color,int x,int y,int width,int height) {
-        TextRenderer.DrawText(g,text,font,new Rectangle(x,y,width,height),color,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding);
-    }
-    void Bar(Graphics g,int y,double used,double total,Color color) {
-        int w=Width-40;using(var b=new SolidBrush(Color.FromArgb(48,57,73)))g.FillRectangle(b,20,y,w,6);
-        if(total>0)using(var b=new SolidBrush(color))g.FillRectangle(b,20,y,(int)(w*Math.Max(0,Math.Min(1,used/total))),6);
+    readonly Session session;ServerViewMode mode;
+    readonly Font hostFont=new Font("Segoe UI",16,FontStyle.Bold), labelFont=new Font("Segoe UI",9), valueFont=new Font("Segoe UI",14,FontStyle.Bold), ringFont=new Font("Segoe UI",15,FontStyle.Bold), smallFont=new Font("맑은 고딕",9);
+    public ServerCard(Session source,ServerViewMode viewMode) {session=source;mode=viewMode;DoubleBuffered=true;BackColor=Ui.Background;}
+    public ServerViewMode Mode {get{return mode;}set{mode=value;Invalidate();}}
+    public int DesiredHeight {get {var state=session.Snapshot();int count=state.Data!=null&&state.Data.gpus!=null?state.Data.gpus.Length:0;if(mode==ServerViewMode.One)return Math.Max(400,140+Math.Max(1,(count+3)/4)*170+78);return Math.Max(464,121+count*108+120);}}
+    void TextAt(Graphics g,string text,Font font,Color color,int x,int y,int width,int height,TextFormatFlags extra) {TextRenderer.DrawText(g,text,font,new Rectangle(x,y,width,height),color,TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding|extra);}
+    void TextAt(Graphics g,string text,Font font,Color color,int x,int y,int width,int height){TextAt(g,text,font,color,x,y,width,height,TextFormatFlags.Left);}
+    void Bar(Graphics g,int x,int y,int width,double used,double total,Color color) {using(var pen=new Pen(Ui.Track,7)){pen.StartCap=pen.EndCap=LineCap.Round;g.DrawLine(pen,x,y,x+width,y);}if(total>0)using(var pen=new Pen(color,7)){pen.StartCap=pen.EndCap=LineCap.Round;g.DrawLine(pen,x,y,x+(int)(width*Math.Max(0,Math.Min(1,used/total))),y);}}
+    void Ring(Graphics g,Gpu gpu,Rectangle cell) {
+        int diameter=Math.Min(94,cell.Width-34),x=cell.X+(cell.Width-diameter)/2,y=cell.Y+24;var ring=new Rectangle(x+7,y+7,diameter-14,diameter-14);
+        double ratio=gpu.used.HasValue&&gpu.total.HasValue&&gpu.total.Value>0?Math.Max(0,Math.Min(1,gpu.used.Value/gpu.total.Value)):0;
+        using(var pen=new Pen(Ui.Track,9)){pen.StartCap=pen.EndCap=LineCap.Round;g.DrawArc(pen,ring,-90,359.8f);}if(ratio>0)using(var pen=new Pen(Ui.Accent,9)){pen.StartCap=pen.EndCap=LineCap.Round;g.DrawArc(pen,ring,-90,(float)(359.8*ratio));}
+        string percent=gpu.total.HasValue&&gpu.total.Value>0?(ratio*100).ToString("0")+"%":"—";TextAt(g,percent,ringFont,Ui.Text,x,y,diameter,diameter,TextFormatFlags.HorizontalCenter);
+        TextAt(g,"GPU "+gpu.index,labelFont,Ui.Muted,cell.X,cell.Y,cell.Width,24,TextFormatFlags.HorizontalCenter);
+        string memory=gpu.used.HasValue&&gpu.total.HasValue?(gpu.used.Value/1024).ToString("0.0")+" / "+(gpu.total.Value/1024).ToString("0.0")+" GB":"메모리 —";
+        TextAt(g,memory,smallFont,Ui.Text,cell.X,cell.Y+121,cell.Width,22,TextFormatFlags.HorizontalCenter);
+        string stats=(gpu.utilization.HasValue?"Usage "+gpu.utilization.Value.ToString("0")+"%":"Usage —")+"   ·   "+(gpu.temperature.HasValue?gpu.temperature.Value.ToString("0")+"°C":"—");
+        TextAt(g,stats,smallFont,Ui.Accent,cell.X,cell.Y+143,cell.Width,22,TextFormatFlags.HorizontalCenter);
     }
     protected override void OnPaint(PaintEventArgs e) {
-        base.OnPaint(e);var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;
-        var state=session.Snapshot();double age=(DateTime.UtcNow-state.Received).TotalSeconds;
-        bool live=state.Connected&&age<4;var signal=live?green:Color.FromArgb(238,175,93);
-        TextAt(g,session.Config.Host,hostFont,Color.White,20,16,Width-40,32);
-        TextAt(g,session.Config.User,labelFont,muted,20,50,Width-40,22);
-        using(var brush=new SolidBrush(signal))g.FillEllipse(brush,21,86,8,8);
-        TextAt(g,state.Connected&&!live?"응답 지연":state.State,smallFont,signal,38,77,Width-60,25);
-        var data=live?state.Data:null;int y=121;
-        if(data!=null&&data.gpus.Length>0) {
-            foreach(var gpu in data.gpus) {
-                TextAt(g,"GPU "+gpu.index+"  ·  "+gpu.name,labelFont,muted,20,y,Width-40,24);
-                string memory=gpu.used.HasValue&&gpu.total.HasValue?gpu.used.Value.ToString("0")+" MiB / "+gpu.total.Value.ToString("0")+" MiB":"메모리 정보 없음";
-                TextAt(g,memory,valueFont,Color.White,20,y+27,Width-40,32);
-                Bar(g,y+66,gpu.used??0,gpu.total??0,purple);
-                TextAt(g,"GPU 사용률  "+(gpu.utilization.HasValue?gpu.utilization.Value.ToString("0")+"%":"—")+"   ·   온도  "+(gpu.temperature.HasValue?gpu.temperature.Value.ToString("0")+" °C":"—"),smallFont,green,20,y+75,Width-40,22);y+=108;
-            }
-        } else {
-            TextAt(g,"GPU",labelFont,muted,20,y,Width-40,24);
-            TextAt(g,data==null?"—":string.IsNullOrEmpty(data.gpu_error)?"GPU 없음":"GPU 조회 실패",valueFont,muted,20,y+27,Width-40,32);y+=94;
-        }
-        TextAt(g,"RAM",labelFont,muted,20,y,Width-40,24);
-        bool ram=data!=null&&data.ram_total>0&&string.IsNullOrEmpty(data.ram_error);
-        string ramText=ram?(data.ram_used/1024).ToString("0.0")+" GiB / "+(data.ram_total/1024).ToString("0.0")+" GiB":"—";
-        TextAt(g,ramText,valueFont,Color.White,20,y+27,Width-40,32);
-        Bar(g,y+66,ram?data.ram_used:0,ram?data.ram_total:0,green);
-        TextAt(g,live?"마지막 갱신  "+state.Received.ToLocalTime().ToString("HH:mm:ss"):"상태는 SSH 연결 기준입니다.",smallFont,muted,20,Height-34,Width-40,24);
+        base.OnPaint(e);var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;using(var p=Ui.Round(new Rectangle(0,0,Width-1,Height-1),18))using(var b=new SolidBrush(Ui.Surface))g.FillPath(b,p);
+        var state=session.Snapshot();double age=(DateTime.UtcNow-state.Received).TotalSeconds;bool live=state.Connected&&age<4;var signal=live?Ui.Accent:Color.FromArgb(232,177,92);var data=live?state.Data:null;
+        TextAt(g,session.Config.Host,hostFont,Ui.Text,24,18,Width-48,31);TextAt(g,session.Config.User,labelFont,Ui.Muted,24,49,Width-48,21);
+        using(var brush=new SolidBrush(signal))g.FillEllipse(brush,25,84,8,8);TextAt(g,state.Connected&&!live?"응답 지연":state.State,smallFont,signal,42,75,Width-66,25);
+        if(mode==ServerViewMode.One)PaintOne(g,data,live);else PaintList(g,data,live);
     }
-    protected override void Dispose(bool disposing) {if(disposing){hostFont.Dispose();labelFont.Dispose();valueFont.Dispose();smallFont.Dispose();}base.Dispose(disposing);}
+    void PaintList(Graphics g,Sample data,bool live) {
+        int y=118;if(data!=null&&data.gpus!=null&&data.gpus.Length>0)foreach(var gpu in data.gpus){TextAt(g,"GPU "+gpu.index+"  ·  "+gpu.name,labelFont,Ui.Muted,24,y,Width-48,24);string memory=gpu.used.HasValue&&gpu.total.HasValue?gpu.used.Value.ToString("0")+" MiB / "+gpu.total.Value.ToString("0")+" MiB":"메모리 정보 없음";TextAt(g,memory,valueFont,Ui.Text,24,y+27,Width-48,32);Bar(g,25,y+69,Width-50,gpu.used??0,gpu.total??0,Ui.Accent);TextAt(g,"Usage  "+(gpu.utilization.HasValue?gpu.utilization.Value.ToString("0")+"%":"—")+"   ·   "+(gpu.temperature.HasValue?gpu.temperature.Value.ToString("0")+"°C":"—"),smallFont,Ui.Accent,24,y+77,Width-48,22);y+=108;}
+        else {TextAt(g,"GPU",labelFont,Ui.Muted,24,y,Width-48,24);TextAt(g,data==null?"—":"GPU 없음",valueFont,Ui.Muted,24,y+27,Width-48,32);y+=94;}
+        PaintRam(g,data,y);PaintFooter(g,live);
+    }
+    void PaintOne(Graphics g,Sample data,bool live) {
+        int y=112;if(data!=null&&data.gpus!=null&&data.gpus.Length>0){int cols=Math.Min(4,data.gpus.Length),cellWidth=(Width-48)/cols;for(int i=0;i<data.gpus.Length;i++){int row=i/4,col=i%4;Ring(g,data.gpus[i],new Rectangle(24+col*cellWidth,y+row*170,cellWidth,168));}y+=((data.gpus.Length+3)/4)*170+8;}else{TextAt(g,data==null?"GPU 데이터를 기다리는 중입니다.":"GPU 없음",valueFont,Ui.Muted,24,y,Width-48,72,TextFormatFlags.HorizontalCenter);y+=94;}PaintRam(g,data,y);PaintFooter(g,live);
+    }
+    void PaintRam(Graphics g,Sample data,int y){bool ram=data!=null&&data.ram_total>0&&string.IsNullOrEmpty(data.ram_error);string text=ram?"RAM   "+(data.ram_used/1024).ToString("0.0")+" / "+(data.ram_total/1024).ToString("0.0")+" GiB":"RAM   —";TextAt(g,text,smallFont,Ui.Muted,24,y,Width-48,25);Bar(g,25,y+32,Width-50,ram?data.ram_used:0,ram?data.ram_total:0,Ui.Accent);}
+    void PaintFooter(Graphics g,bool live){var state=session.Snapshot();TextAt(g,live?"마지막 갱신  "+state.Received.ToLocalTime().ToString("HH:mm:ss"):"상태는 SSH 연결 기준입니다.",smallFont,Ui.Muted,24,Height-37,Width-48,24);}
+    protected override void Dispose(bool disposing){if(disposing){hostFont.Dispose();labelFont.Dispose();valueFont.Dispose();ringFont.Dispose();smallFont.Dispose();}base.Dispose(disposing);}
 }
 class MonitorForm : Form {
-    readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer {Interval=1000};
-    readonly List<Session> sessions=new List<Session>();readonly List<ServerCard> cards=new List<ServerCard>();
-    readonly FlowLayoutPanel area=new FlowLayoutPanel();readonly string directory;
-    public MonitorForm(string configDirectory) {
-        directory=configDirectory;Text="Lab Server Monitor";ClientSize=new Size(980,640);MinimumSize=new Size(800,670);StartPosition=FormStartPosition.CenterScreen;
-        BackColor=Color.FromArgb(17,23,33);ForeColor=Color.White;Font=new Font("맑은 고딕",10);AutoScaleMode=AutoScaleMode.Dpi;
-        Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        var menu=new MenuStrip {BackColor=Color.FromArgb(24,31,43),ForeColor=Color.White,GripStyle=ToolStripGripStyle.Hidden};
-        var loginManager=new ToolStripMenuItem("로그인 관리") {ForeColor=Color.White};menu.Items.Add(loginManager);MainMenuStrip=menu;Controls.Add(menu);
-        Controls.Add(new Label {Text="Lab Server Monitor",Location=new Point(24,43),Size=new Size(600,42),Font=new Font("Segoe UI",23,FontStyle.Bold)});
-        Controls.Add(new Label {Text="1초마다 갱신  ·  GPU 메모리 / 사용률 / 온도 / RAM",Location=new Point(26,91),Size=new Size(600,25),ForeColor=Color.FromArgb(153,167,188)});
-        area.Location=new Point(16,133);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-147);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;area.FlowDirection=FlowDirection.LeftToRight;area.TabStop=true;Controls.Add(area);
-        loginManager.Click+=delegate {using(var manager=new LoginManagerForm(directory)){manager.ShowDialog(this);if(manager.Changed)ReloadServers();}};
-        ReloadServers();
-        timer.Tick+=delegate {foreach(var card in cards){int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Invalidate();}};timer.Start();
-        FormClosed+=delegate {timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
+    readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer {Interval=1000};readonly List<Session> sessions=new List<Session>();readonly List<ServerCard> cards=new List<ServerCard>();
+    readonly FlowLayoutPanel area=new FlowLayoutPanel();readonly string directory;readonly Sample previewData;readonly ModeToggle toggle=new ModeToggle();ServerViewMode mode=ServerViewMode.List;
+    public MonitorForm(string configDirectory):this(configDirectory,null){}
+    public MonitorForm(string configDirectory,Sample preview) {
+        directory=configDirectory;previewData=preview;Text="Lab Server Monitor";ClientSize=new Size(1000,680);MinimumSize=new Size(820,670);StartPosition=FormStartPosition.CenterScreen;BackColor=Ui.Background;ForeColor=Ui.Text;Font=new Font("맑은 고딕",10);AutoScaleMode=AutoScaleMode.Dpi;Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        AddDot(Color.FromArgb(255,95,86),24);AddDot(Color.FromArgb(255,189,46),44);AddDot(Color.FromArgb(39,201,63),64);
+        Controls.Add(new Label {Text="Lab Server Monitor",Location=new Point(24,43),Size=new Size(560,42),Font=new Font("Segoe UI",23,FontStyle.Bold)});
+        Controls.Add(new Label {Text="GPU와 RAM 상태를 1초마다 확인합니다",Location=new Point(26,87),Size=new Size(560,25),ForeColor=Ui.Muted});
+        var loginManager=new Button {Text="로그인 관리",Size=new Size(116,36),Location=new Point(ClientSize.Width-140,32),Anchor=AnchorStyles.Top|AnchorStyles.Right};Ui.StyleButton(loginManager,Ui.Surface2);Controls.Add(loginManager);
+        toggle.Location=new Point(ClientSize.Width-328,32);toggle.Anchor=AnchorStyles.Top|AnchorStyles.Right;Controls.Add(toggle);
+        area.Location=new Point(16,126);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-142);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;area.FlowDirection=FlowDirection.LeftToRight;area.TabStop=true;area.BackColor=Ui.Background;Controls.Add(area);
+        loginManager.Click+=delegate {using(var manager=new LoginManagerForm(directory)){manager.ShowDialog(this);if(manager.Changed)ReloadServers();}};toggle.ModeChanged+=delegate {mode=toggle.Mode;SaveMode();LayoutCards();};area.Resize+=delegate {LayoutCards();};
+        LoadMode();ReloadServers();timer.Tick+=delegate {LayoutCards();foreach(var card in cards)card.Invalidate();};timer.Start();FormClosed+=delegate {timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
     }
-    void ReloadServers() {
-        foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);
-        foreach(var server in config.Servers){if(server==null)continue;var session=new Session(server,directory);sessions.Add(session);var card=new ServerCard(session){Size=new Size(458,464),Margin=new Padding(8,0,8,12)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}
-        if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. 상단의 ‘로그인 관리’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Color.FromArgb(190,200,215)});
-    }
-    public void SaveCheck(string path) {
-        var states=new List<object>();
-        foreach(var session in sessions)states.Add(new {host=session.Config.Host,state=session.Snapshot()});
-        File.WriteAllText(path+".json",new JavaScriptSerializer().Serialize(states));
-        using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(path+".png");}
-    }
+    void AddDot(Color color,int x){var dot=new Panel {BackColor=color,Location=new Point(x,18),Size=new Size(10,10)};dot.Paint+=delegate(object s,PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var b=new SolidBrush(color))e.Graphics.FillEllipse(b,0,0,9,9);};Controls.Add(dot);}
+    string ModePath {get{return Path.Combine(directory,"view-mode.txt");}}
+    void LoadMode(){try{if(File.Exists(ModePath)&&File.ReadAllText(ModePath).Trim()=="One")mode=ServerViewMode.One;}catch{}toggle.Mode=mode;}
+    void SaveMode(){try{Directory.CreateDirectory(directory);File.WriteAllText(ModePath,mode.ToString());}catch{}}
+    void LayoutCards(){if(cards.Count==0)return;int available=Math.Max(720,area.ClientSize.Width-24);int width=mode==ServerViewMode.One?available:Math.Max(370,(available-28)/2);foreach(var card in cards){card.Mode=mode;card.Width=width;int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Margin=new Padding(8,0,8,14);}}
+    void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;var session=previewData==null?new Session(server,directory):new Session(server,previewData);sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. ‘로그인 관리’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});LayoutCards();}
+    void SetModeCore(ServerViewMode value){mode=value;toggle.Mode=value;LayoutCards();}
+    public void ShowOnePreview(){SetModeCore(ServerViewMode.One);}
+    public void SaveCheck(string path){var states=new List<object>();foreach(var session in sessions)states.Add(new {host=session.Config.Host,state=session.Snapshot()});File.WriteAllText(path+".json",new JavaScriptSerializer().Serialize(states));using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(path+".png");}}
 }
 class Program {
     [System.Runtime.InteropServices.DllImport("user32.dll",CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
@@ -304,6 +323,15 @@ class Program {
             string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
             try {using(var form=new LoginManagerForm(previewDirectory)){form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}}
             catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}return 0;
+        }
+        if(args.Length==2&&args[0]=="--one-ui-test") {
+            string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-One-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
+            try {
+                var server=new ServerConfig {Host="gpu-lab.example",User="researcher",HostKey="preview",PasswordFile="preview.txt"};ConfigStore.Save(previewDirectory,new []{server});
+                var gpus=new List<Gpu>();for(int i=0;i<8;i++)gpus.Add(new Gpu {index=i.ToString(),name="NVIDIA GPU",used=8200+i*1350,total=49152,utilization=18+i*9,temperature=47+i*2});
+                var sample=new Sample {gpus=gpus.ToArray(),ram_used=96256,ram_total=256000};
+                using(var form=new MonitorForm(previewDirectory,sample)){form.ShowOnePreview();form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}
+            } catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}finally{try{Directory.Delete(previewDirectory,true);}catch{}}return 0;
         }
         string directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LabServerMonitor");
         try {

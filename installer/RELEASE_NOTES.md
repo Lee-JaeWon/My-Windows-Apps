@@ -1,4 +1,4 @@
-## My Windows Apps Setup v1.0.3
+## My Windows Apps Setup v1.0.4
 
 Windows 10/11용 단일 설치 파일입니다.
 
@@ -13,6 +13,10 @@ Windows 10/11용 단일 설치 파일입니다.
 - 설치 화면에서 선택한 앱 삭제 지원
 - 앱 폴더·바탕화면 바로가기·GPT 자동 시작 설정 자동 제거
 - Lab 로그인 정보는 선택한 경우에만 함께 삭제
+- GIF Generator, Lab Server Monitor, 설치 화면을 둥근 카드 중심의 macOS풍 디자인으로 개선
+- Lab Server Monitor에 List / One 화면 전환 추가
+- One 화면에서 GPU 메모리를 최대 4열 원형 게이지로 표시하고 Usage·온도를 함께 표시
+- 선택한 Lab 화면 모드를 다음 실행에도 유지
 - 서버 로그인 정보는 설치 후 각 PC에서 입력하며 설치 파일에는 포함되지 않음
 
 `My Windows Apps Setup.exe` 하나를 내려받아 실행하면 됩니다.

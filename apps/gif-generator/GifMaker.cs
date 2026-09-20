@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Diagnostics;
 using System.Threading;
@@ -14,7 +15,22 @@ using System.Reflection;
 [assembly: AssemblyTitle("GIF Generator")]
 [assembly: AssemblyProduct("GIF Generator")]
 [assembly: AssemblyDescription("MP4 to GIF and MP4 speed converter")]
-[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+
+static class GUi {
+    public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
+    public static GraphicsPath Round(Rectangle r,int radius){var p=new GraphicsPath();int d=radius*2;p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
+    public static void Button(Button b,Color color){b.FlatStyle=FlatStyle.Flat;b.FlatAppearance.BorderSize=0;b.BackColor=color;b.ForeColor=Text;b.Cursor=Cursors.Hand;using(var p=Round(new Rectangle(0,0,b.Width,b.Height),10))b.Region=new Region(p);b.Resize+=delegate{using(var p=Round(new Rectangle(0,0,b.Width,b.Height),10))b.Region=new Region(p);};}
+}
+class GRoundedPanel : Panel {
+    public GRoundedPanel(){DoubleBuffered=true;BackColor=GUi.Surface;Resize+=delegate{using(var p=GUi.Round(new Rectangle(0,0,Width,Height),16))Region=new Region(p);};}
+    protected override void OnPaintBackground(PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var p=GUi.Round(new Rectangle(0,0,Width-1,Height-1),16))using(var b=new SolidBrush(GUi.Surface))e.Graphics.FillPath(b,p);}
+}
+class GProgressBar : Control {
+    int value,maximum=100;public int Maximum {get{return maximum;}set{maximum=Math.Max(1,value);Invalidate();}}public int Value {get{return value;}set{this.value=Math.Max(0,Math.Min(maximum,value));Invalidate();}}
+    public GProgressBar(){DoubleBuffered=true;BackColor=GUi.Background;}
+    protected override void OnPaint(PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;int y=Height/2;using(var p=new Pen(GUi.Surface2,6)){p.StartCap=p.EndCap=LineCap.Round;e.Graphics.DrawLine(p,4,y,Width-4,y);}if(value>0)using(var p=new Pen(GUi.Accent,6)){p.StartCap=p.EndCap=LineCap.Round;e.Graphics.DrawLine(p,4,y,4+(Width-8)*value/maximum,y);}}
+}
 
 class Engine {
     public volatile bool Cancelled;
@@ -157,24 +173,25 @@ class Engine {
 }
 
 class MainForm : Form {
-    Label pathLabel, status, detail; Button select, start, cancel, open, reset; ProgressBar bar;
+    Label pathLabel, status, detail; Button select, start, cancel, open, reset; GProgressBar bar;
     string input, result; Engine engine; bool busy;
-    TabControl tabs; SpeedPanel speedPanel;
-    Color bg=Color.FromArgb(20,24,34), panel=Color.FromArgb(31,37,51), muted=Color.FromArgb(161,173,195);
+    Panel gifPage,speedPage;Button gifTabButton,speedTabButton;SpeedPanel speedPanel;int activeTab;
+    Color bg=GUi.Background, panel=GUi.Surface2, muted=GUi.Muted;
     public MainForm() {
-        Text="GIF Generator"; ClientSize=new Size(660,520); MinimumSize=MaximumSize=Size; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; StartPosition=FormStartPosition.CenterScreen; BackColor=bg; ForeColor=Color.White; Font=new Font("맑은 고딕",10); AutoScaleMode=AutoScaleMode.Dpi;
+        Text="GIF Generator"; ClientSize=new Size(660,520); MinimumSize=MaximumSize=Size; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; StartPosition=FormStartPosition.CenterScreen; BackColor=bg; ForeColor=GUi.Text; Font=new Font("맑은 고딕",10); AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        AddDot(Color.FromArgb(255,95,86),28);AddDot(Color.FromArgb(255,189,46),48);AddDot(Color.FromArgb(39,201,63),68);
         Label title=LabelAt("GIF Generator",28,22,440,48,26,Color.White); title.Font=new Font(Font.FontFamily,26,FontStyle.Bold);
         Label credit=LabelAt("Created by jw",480,34,150,20,9,Color.White); credit.TextAlign=ContentAlignment.MiddleRight; credit.BringToFront();
         LabelAt("GIF 만들기와 MP4 배속 변환을 한곳에서",30,76,600,28,12,muted);
-        var drop=new Panel { Location=new Point(28,122),Size=new Size(604,112),BackColor=panel,AllowDrop=true }; Controls.Add(drop);
+        var drop=new GRoundedPanel { Location=new Point(28,122),Size=new Size(604,112),AllowDrop=true }; Controls.Add(drop);
         pathLabel=new Label { Text="MP4 파일을 여기에 끌어 놓으세요",Location=new Point(18,20),Size=new Size(440,70),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true,ForeColor=Color.White }; drop.Controls.Add(pathLabel);
         select=ButtonAt("파일 선택",460,34,120,42,false); drop.Controls.Add(select); select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="GIF로 만들 MP4 선택"}) if(d.ShowDialog()==DialogResult.OK) SetInput(d.FileName); }; select.BringToFront();
         AllowDrop=true; DragEnter+=EnterFile; DragDrop+=DropFile; drop.DragEnter+=EnterFile; drop.DragDrop+=DropFile;
         detail=LabelAt("50MB 이하 · 최대 999프레임 (Google Drive 전용)",30,246,600,25,10,muted);
         LabelAt("원본 길이 유지 · 무한 반복",30,270,600,23,9,muted);
         status=LabelAt("파일을 선택하면 시작할 수 있습니다.",30,294,600,40,10,Color.White);
-        bar=new ProgressBar {Location=new Point(30,338),Size=new Size(600,7),Maximum=100}; Controls.Add(bar);
+        bar=new GProgressBar {Location=new Point(30,338),Size=new Size(600,10),Maximum=100}; Controls.Add(bar);
         start=ButtonAt("GIF 만들기",30,374,210,48,true); start.Enabled=false; start.Click+=async delegate { await BeginConvert(); };
         cancel=ButtonAt("취소",254,374,80,48,false); cancel.Enabled=false; cancel.Click+=delegate { if(engine!=null) {engine.Cancelled=true; status.Text="변환을 취소하고 있습니다…";} };
         open=ButtonAt("저장 폴더 열기",348,374,160,48,false); open.Enabled=false; open.Click+=delegate { if(result!=null) Process.Start("explorer.exe","/select,\""+result+"\""); };
@@ -182,27 +199,25 @@ class MainForm : Form {
         // Keep the GIF controls and their state on the first tab.
         var gifControls=new System.Collections.Generic.List<Control>();
         foreach(Control c in Controls) if(c.Top>=122) gifControls.Add(c);
-        tabs=new TabControl { Location=new Point(0,116),Size=new Size(660,390),DrawMode=TabDrawMode.OwnerDrawFixed,ItemSize=new Size(325,36),SizeMode=TabSizeMode.Fixed,Padding=new Point(16,6) };
-        var gifTab=new TabPage("MP4 → GIF") {BackColor=bg};
-        var speedTab=new TabPage("MP4 배속 → MP4") {BackColor=bg};
-        tabs.TabPages.Add(gifTab); tabs.TabPages.Add(speedTab); Controls.Add(tabs);
-        foreach(Control c in gifControls) { c.Top-=110; gifTab.Controls.Add(c); }
-        speedPanel=new SpeedPanel {Dock=DockStyle.Fill}; speedTab.Controls.Add(speedPanel);
-        tabs.DrawItem+=delegate(object sender,DrawItemEventArgs e) {
-            using(var brush=new SolidBrush(e.Index==tabs.SelectedIndex?Color.FromArgb(112,86,245):panel)) e.Graphics.FillRectangle(brush,e.Bounds);
-            TextRenderer.DrawText(e.Graphics,tabs.TabPages[e.Index].Text,Font,e.Bounds,Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
-        };
-        tabs.Selecting+=delegate(object sender,TabControlCancelEventArgs e) { if(busy || speedPanel.Busy) e.Cancel=true; };
+        var switcher=new GRoundedPanel {Location=new Point(28,116),Size=new Size(604,42)};Controls.Add(switcher);
+        gifTabButton=new Button {Text="MP4 → GIF",Location=new Point(3,3),Size=new Size(297,36)};GUi.Button(gifTabButton,GUi.Accent);switcher.Controls.Add(gifTabButton);
+        speedTabButton=new Button {Text="MP4 배속 → MP4",Location=new Point(304,3),Size=new Size(297,36)};GUi.Button(speedTabButton,GUi.Surface2);switcher.Controls.Add(speedTabButton);
+        gifPage=new Panel {Location=new Point(0,164),Size=new Size(660,350),BackColor=bg};speedPage=new Panel {Location=gifPage.Location,Size=gifPage.Size,BackColor=bg,Visible=false};Controls.Add(gifPage);Controls.Add(speedPage);
+        foreach(Control c in gifControls) {c.Top-=110;gifPage.Controls.Add(c);}
+        speedPanel=new SpeedPanel {Dock=DockStyle.Fill};speedPage.Controls.Add(speedPanel);
+        gifTabButton.Click+=delegate{SelectTab(0);};speedTabButton.Click+=delegate{SelectTab(1);};SelectTab(0);
         FormClosing+=delegate(object s,FormClosingEventArgs e) {
             if(busy) {e.Cancel=true; engine.Cancelled=true; status.Text="취소 중입니다. 완료 후 창을 닫아 주세요.";}
             if(speedPanel.Busy) {e.Cancel=true; speedPanel.Cancel();}
         };
     }
-    public void SelectSpeedTab() { tabs.SelectedIndex=1; }
+    void SelectTab(int index){if(busy||speedPanel.Busy)return;activeTab=index;gifPage.Visible=index==0;speedPage.Visible=index==1;gifTabButton.BackColor=index==0?GUi.Accent:GUi.Surface2;speedTabButton.BackColor=index==1?GUi.Accent:GUi.Surface2;gifTabButton.ForeColor=index==0?Color.FromArgb(15,26,18):GUi.Muted;speedTabButton.ForeColor=index==1?Color.FromArgb(15,26,18):GUi.Muted;}
+    public void SelectSpeedTab(){SelectTab(1);}
+    void AddDot(Color color,int x){var dot=new Panel {BackColor=bg,Location=new Point(x,13),Size=new Size(10,10)};dot.Paint+=delegate(object s,PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var b=new SolidBrush(color))e.Graphics.FillEllipse(b,0,0,9,9);};Controls.Add(dot);}
     Label LabelAt(string text,int x,int y,int w,int h,int size,Color color) {var l=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=color};Controls.Add(l);return l;}
-    Button ButtonAt(string text,int x,int y,int w,int h,bool primary) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(w,h),FlatStyle=FlatStyle.Flat,BackColor=primary?Color.FromArgb(112,86,245):panel,ForeColor=Color.White,Cursor=Cursors.Hand}; b.FlatAppearance.BorderSize=0; Controls.Add(b);return b;}
+    Button ButtonAt(string text,int x,int y,int w,int h,bool primary) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(w,h)};GUi.Button(b,primary?GUi.Accent:panel);Controls.Add(b);return b;}
     void EnterFile(object s,DragEventArgs e) {e.Effect=!busy&&!speedPanel.Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;}
-    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy)return; var files=(string[])e.Data.GetData(DataFormats.FileDrop);if(files!=null&&files.Length>0) {if(tabs.SelectedIndex==1)speedPanel.SetInput(files[0]);else SetInput(files[0]);}}
+    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy)return; var files=(string[])e.Data.GetData(DataFormats.FileDrop);if(files!=null&&files.Length>0) {if(activeTab==1)speedPanel.SetInput(files[0]);else SetInput(files[0]);}}
     void ResetInput() {
         if(busy)return;
         input=result=null; engine=null;
@@ -226,13 +241,13 @@ class MainForm : Form {
     }
 }
 class SpeedPanel : UserControl {
-    Label fileLabel,status; NumericUpDown rate; Button select,start,cancel,open,reset; ProgressBar bar;
+    Label fileLabel,status; NumericUpDown rate; Button select,start,cancel,open,reset; GProgressBar bar;
     string input,result; Engine engine;
     public bool Busy {get;private set;}
-    Color surface=Color.FromArgb(31,37,51), muted=Color.FromArgb(161,173,195);
+    Color surface=GUi.Surface2, muted=GUi.Muted;
     public SpeedPanel() {
-        BackColor=Color.FromArgb(20,24,34); ForeColor=Color.White; Font=new Font("맑은 고딕",10); AllowDrop=true;
-        var drop=new Panel {Location=new Point(28,12),Size=new Size(604,100),BackColor=surface,AllowDrop=true}; Controls.Add(drop);
+        BackColor=GUi.Background; ForeColor=GUi.Text; Font=new Font("맑은 고딕",10); AllowDrop=true;
+        var drop=new GRoundedPanel {Location=new Point(28,12),Size=new Size(604,100),AllowDrop=true}; Controls.Add(drop);
         fileLabel=new Label {Text="MP4 파일을 여기에 끌어 놓으세요",Location=new Point(18,16),Size=new Size(430,68),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true}; drop.Controls.Add(fileLabel);
         select=MakeButton("파일 선택",460,30,120); drop.Controls.Add(select);
         select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="배속할 MP4 선택"}) if(d.ShowDialog()==DialogResult.OK) SetInput(d.FileName); };
@@ -242,8 +257,8 @@ class SpeedPanel : UserControl {
         LabelAt("고화질 MP4 저장 · 소리 음높이 유지",30,174,600,25,10);
         LabelAt("1배 미만은 느리게, 1배 초과는 빠르게 재생됩니다.",30,198,600,25,9);
         status=LabelAt("파일과 배속을 선택하면 시작할 수 있습니다.",30,231,600,35,10); status.ForeColor=Color.White;
-        bar=new ProgressBar {Location=new Point(30,272),Size=new Size(600,7)}; Controls.Add(bar);
-        start=MakeButton("배속 MP4 만들기",30,298,210); start.BackColor=Color.FromArgb(112,86,245); start.Enabled=false; start.Click+=async delegate {await Convert();};
+        bar=new GProgressBar {Location=new Point(30,272),Size=new Size(600,10)}; Controls.Add(bar);
+        start=MakeButton("배속 MP4 만들기",30,298,210); start.BackColor=GUi.Accent; start.Enabled=false; start.Click+=async delegate {await Convert();};
         cancel=MakeButton("취소",254,298,80); cancel.Enabled=false; cancel.Click+=delegate {Cancel();};
         open=MakeButton("저장 폴더 열기",348,298,160); open.Enabled=false; open.Click+=delegate {if(result!=null)Process.Start("explorer.exe","/select,\""+result+"\"");};
         reset=MakeButton("초기화",522,298,108); reset.Click+=delegate {if(Busy)return;input=result=null;engine=null;fileLabel.Text="MP4 파일을 여기에 끌어 놓으세요";rate.Value=2M;bar.Value=0;status.Text="파일과 배속을 선택하면 시작할 수 있습니다.";start.Enabled=cancel.Enabled=open.Enabled=false;};
@@ -252,7 +267,7 @@ class SpeedPanel : UserControl {
         DragEnter+=enter; DragDrop+=dropped; drop.DragEnter+=enter; drop.DragDrop+=dropped;
     }
     Label LabelAt(string text,int x,int y,int w,int h,int size) {var l=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=muted};Controls.Add(l);return l;}
-    Button MakeButton(string text,int x,int y,int width) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(width,42),FlatStyle=FlatStyle.Flat,BackColor=surface,ForeColor=Color.White,Cursor=Cursors.Hand};b.FlatAppearance.BorderSize=0;Controls.Add(b);return b;}
+    Button MakeButton(string text,int x,int y,int width) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(width,42)};GUi.Button(b,surface);Controls.Add(b);return b;}
     public void SetInput(string path) {
         if(Busy)return;
         if(!File.Exists(path)||!Path.GetExtension(path).Equals(".mp4",StringComparison.OrdinalIgnoreCase)){MessageBox.Show("MP4 파일을 선택해 주세요.");return;}

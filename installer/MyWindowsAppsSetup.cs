@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -12,15 +13,31 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("My Windows Apps Setup")]
 [assembly: AssemblyProduct("My Windows Apps")]
 [assembly: AssemblyDescription("Installer for GIF Generator, Lab Server Monitor and GPT Usage Tray")]
-[assembly: AssemblyVersion("1.0.3.0")]
+[assembly: AssemblyVersion("1.0.4.0")]
+
+static class SetupUi {
+    public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
+    public static GraphicsPath Round(Rectangle r,int radius){var p=new GraphicsPath();int d=radius*2;p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
+    public static void Button(Button b,Color color){b.FlatStyle=FlatStyle.Flat;b.FlatAppearance.BorderSize=0;b.BackColor=color;b.ForeColor=Text;b.Cursor=Cursors.Hand;using(var p=Round(new Rectangle(0,0,b.Width,b.Height),11))b.Region=new Region(p);b.Resize+=delegate{using(var p=Round(new Rectangle(0,0,b.Width,b.Height),11))b.Region=new Region(p);};}
+}
+class SetupCard : Panel {
+    public SetupCard(){DoubleBuffered=true;BackColor=SetupUi.Surface;Resize+=delegate{using(var p=SetupUi.Round(new Rectangle(0,0,Width,Height),16))Region=new Region(p);};}
+    protected override void OnPaintBackground(PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var p=SetupUi.Round(new Rectangle(0,0,Width-1,Height-1),16))using(var b=new SolidBrush(SetupUi.Surface))e.Graphics.FillPath(b,p);}
+}
+class SetupProgress : Control {
+    int value,maximum=3;public int Maximum{get{return maximum;}set{maximum=Math.Max(1,value);Invalidate();}}public int Value{get{return value;}set{this.value=Math.Max(0,Math.Min(maximum,value));Invalidate();}}
+    public SetupProgress(){DoubleBuffered=true;BackColor=SetupUi.Background;}
+    protected override void OnPaint(PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;int y=Height/2;using(var p=new Pen(SetupUi.Surface2,7)){p.StartCap=p.EndCap=LineCap.Round;e.Graphics.DrawLine(p,4,y,Width-4,y);}if(value>0)using(var p=new Pen(SetupUi.Accent,7)){p.StartCap=p.EndCap=LineCap.Round;e.Graphics.DrawLine(p,4,y,4+(Width-8)*value/maximum,y);}}
+}
 
 class SetupForm : Form {
     readonly CheckBox gif=new CheckBox(),monitor=new CheckBox(),usage=new CheckBox();
-    readonly CheckBox removeLabData=new CheckBox();readonly Button install=new Button(),uninstall=new Button();readonly ProgressBar progress=new ProgressBar();readonly Label status=new Label();
-    readonly Color background=Color.FromArgb(17,23,33),surface=Color.FromArgb(29,37,51),muted=Color.FromArgb(165,178,197);
+    readonly CheckBox removeLabData=new CheckBox();readonly Button install=new Button(),uninstall=new Button();readonly SetupProgress progress=new SetupProgress();readonly Label status=new Label();
+    readonly Color background=SetupUi.Background,surface=SetupUi.Surface,muted=SetupUi.Muted;
     public SetupForm() {
         Text="My Windows Apps 설치 및 삭제";ClientSize=new Size(610,550);MinimumSize=MaximumSize=Size;StartPosition=FormStartPosition.CenterScreen;
-        FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;BackColor=background;ForeColor=Color.White;Font=new Font("맑은 고딕",10);Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;BackColor=background;ForeColor=SetupUi.Text;Font=new Font("맑은 고딕",10);Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        AddDot(Color.FromArgb(255,95,86),30);AddDot(Color.FromArgb(255,189,46),50);AddDot(Color.FromArgb(39,201,63),70);
         Controls.Add(new Label {Text="My Windows Apps",Location=new Point(30,24),Size=new Size(540,42),Font=new Font("Segoe UI",24,FontStyle.Bold)});
         Controls.Add(new Label {Text="설치하거나 삭제할 앱을 선택하세요",Location=new Point(32,69),Size=new Size(540,26),ForeColor=muted});
         AddOption(gif,30,112,"GIF Generator","MP4를 50MB·999프레임 이하 GIF로 변환하고 MP4 배속을 조절합니다.");
@@ -30,17 +47,18 @@ class SetupForm : Form {
         removeLabData.Text="삭제할 때 Lab 로그인 정보도 함께 삭제";removeLabData.Location=new Point(31,397);removeLabData.Size=new Size(290,28);removeLabData.ForeColor=muted;Controls.Add(removeLabData);
         progress.Location=new Point(30,435);progress.Size=new Size(290,18);progress.Maximum=3;Controls.Add(progress);
         status.Location=new Point(31,463);status.Size=new Size(290,58);status.ForeColor=muted;status.Text="앱 파일과 필요한 도구가 모두 설치 파일 안에 포함되어 있습니다.";Controls.Add(status);
-        install.Text="선택한 앱 설치";install.Location=new Point(335,435);install.Size=new Size(116,54);install.BackColor=Color.FromArgb(91,76,219);install.ForeColor=Color.White;install.FlatStyle=FlatStyle.Flat;install.FlatAppearance.BorderSize=0;Controls.Add(install);
-        uninstall.Text="선택한 앱 삭제";uninstall.Location=new Point(465,435);uninstall.Size=new Size(116,54);uninstall.BackColor=Color.FromArgb(178,65,82);uninstall.ForeColor=Color.White;uninstall.FlatStyle=FlatStyle.Flat;uninstall.FlatAppearance.BorderSize=0;Controls.Add(uninstall);
+        install.Text="선택한 앱 설치";install.Location=new Point(335,435);install.Size=new Size(116,54);SetupUi.Button(install,SetupUi.Accent);Controls.Add(install);
+        uninstall.Text="선택한 앱 삭제";uninstall.Location=new Point(465,435);uninstall.Size=new Size(116,54);SetupUi.Button(uninstall,Color.FromArgb(126,64,69));Controls.Add(uninstall);
         install.Click+=delegate {BeginInstall();};uninstall.Click+=delegate {BeginUninstall();};
     }
     void AddOption(CheckBox box,int x,int y,string title,string description) {
-        var panel=new Panel {Location=new Point(x,y),Size=new Size(550,82),BackColor=surface};Controls.Add(panel);
+        var panel=new SetupCard {Location=new Point(x,y),Size=new Size(550,82)};Controls.Add(panel);
         box.Location=new Point(17,14);box.Size=new Size(24,24);box.FlatStyle=FlatStyle.Flat;panel.Controls.Add(box);
         panel.Controls.Add(new Label {Text=title,Location=new Point(52,11),Size=new Size(470,27),Font=new Font("맑은 고딕",13,FontStyle.Bold)});
         panel.Controls.Add(new Label {Text=description,Location=new Point(53,43),Size=new Size(475,25),ForeColor=muted});
         panel.Click+=delegate {box.Checked=!box.Checked;};
     }
+    void AddDot(Color color,int x){var dot=new Panel {BackColor=background,Location=new Point(x,12),Size=new Size(10,10)};dot.Paint+=delegate(object s,PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var b=new SolidBrush(color))e.Graphics.FillEllipse(b,0,0,9,9);};Controls.Add(dot);}
     void BeginInstall() {
         if(!gif.Checked&&!monitor.Checked&&!usage.Checked){MessageBox.Show(this,"설치할 앱을 하나 이상 선택해 주세요.","My Windows Apps 설치");return;}
         bool installGif=gif.Checked,installMonitor=monitor.Checked,installUsage=usage.Checked;

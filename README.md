@@ -2,12 +2,12 @@
 
 ## 설치
 
-[최신 설치 파일 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/my-windows-apps-setup-v1.0.3) → **My Windows Apps Setup.exe** 실행 → 원하는 앱 선택 → **선택한 앱 설치** 또는 **선택한 앱 삭제**를 누릅니다.
+[최신 설치 파일 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/my-windows-apps-setup-v1.0.4) → **My Windows Apps Setup.exe** 실행 → 원하는 앱 선택 → **선택한 앱 설치** 또는 **선택한 앱 삭제**를 누릅니다.
 
 ## 앱
 
 - **GIF Generator** — MP4를 50MB·999프레임 이하 GIF로 변환하거나 MP4 배속을 조절합니다.
-- **Lab Server Monitor** — 서버의 GPU·온도·RAM을 확인하며, 로그인 관리에서 SSH 키 지문도 자동 조회합니다.
+- **Lab Server Monitor** — List/One 화면으로 서버의 GPU·온도·RAM을 확인하며, 로그인 관리에서 SSH 키 지문도 자동 조회합니다.
 - **GPT Usage Tray** — Codex Pro 주간 잔여 사용량을 작업표시줄 왼쪽의 원형 게이지로 표시합니다.
 
 ## Windows 보안 때문에 실행되지 않을 때
