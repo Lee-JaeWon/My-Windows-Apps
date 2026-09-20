@@ -19,7 +19,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("GPT Usage Tray")]
 [assembly: AssemblyProduct("GPT Usage Tray")]
 [assembly: AssemblyDescription("Codex usage in the Windows notification area")]
-[assembly: AssemblyVersion("1.1.2.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
 
 class UsageWindow {
     public string Name;
@@ -147,17 +147,32 @@ static class CodexUsageReader {
     }
 }
 
+static class DetailsUi {
+    public static readonly Color Background=Color.FromArgb(14,18,16),Surface=Color.FromArgb(27,35,30),Surface2=Color.FromArgb(35,46,39),Text=Color.FromArgb(244,247,245),Muted=Color.FromArgb(158,171,162),Accent=Color.FromArgb(113,190,126);
+    public static GraphicsPath Round(Rectangle r,int radius){var p=new GraphicsPath();int d=radius*2;p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
+    public static void Button(Button b){b.FlatStyle=FlatStyle.Flat;b.FlatAppearance.BorderSize=0;b.BackColor=Accent;b.ForeColor=Color.FromArgb(15,26,18);b.Cursor=Cursors.Hand;using(var p=Round(new Rectangle(0,0,b.Width,b.Height),11))b.Region=new Region(p);}
+}
+class DetailsCard : Panel {
+    public DetailsCard(){DoubleBuffered=true;BackColor=DetailsUi.Surface;Resize+=delegate{using(var p=DetailsUi.Round(new Rectangle(0,0,Width,Height),18))Region=new Region(p);};}
+}
+class DetailsBar : Control {
+    double remaining;public double Remaining{get{return remaining;}set{remaining=Math.Max(0,Math.Min(100,value));Invalidate();}}
+    public DetailsBar(){DoubleBuffered=true;BackColor=DetailsUi.Surface;Height=10;}
+    protected override void OnPaint(PaintEventArgs e){e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;int y=Height/2;using(var p=new Pen(DetailsUi.Surface2,7)){p.StartCap=p.EndCap=LineCap.Round;e.Graphics.DrawLine(p,4,y,Width-4,y);}if(remaining>0)using(var p=new Pen(UsageContext.ColorFor(remaining),7)){p.StartCap=p.EndCap=LineCap.Round;e.Graphics.DrawLine(p,4,y,4+(int)((Width-8)*remaining/100),y);}}
+}
+
 class DetailsForm : Form {
     Label main,updated,tokens;Panel windows;Button refresh;
-    readonly Color bg=Color.FromArgb(17,23,33),surface=Color.FromArgb(29,37,51),muted=Color.FromArgb(157,171,192);
+    readonly Color bg=DetailsUi.Background,surface=DetailsUi.Surface,muted=DetailsUi.Muted;
     public event EventHandler RefreshRequested;
     public DetailsForm() {
-        Text="GPT 사용량";ClientSize=new Size(440,360);MinimumSize=MaximumSize=Size;FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;BackColor=bg;ForeColor=Color.White;Font=new Font("맑은 고딕",10);ShowInTaskbar=true;
-        main=new Label {Location=new Point(24,20),Size=new Size(390,38),Font=new Font("맑은 고딕",19,FontStyle.Bold),Text="사용량 확인 중…"};Controls.Add(main);
-        updated=new Label {Location=new Point(26,62),Size=new Size(380,24),ForeColor=muted};Controls.Add(updated);
-        windows=new Panel {Location=new Point(20,100),Size=new Size(400,150),BackColor=surface};Controls.Add(windows);
-        tokens=new Label {Location=new Point(24,264),Size=new Size(390,38),ForeColor=muted};Controls.Add(tokens);
-        refresh=new Button {Text="지금 새로고침",Location=new Point(274,310),Size=new Size(146,36),FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(91,76,219),ForeColor=Color.White};refresh.FlatAppearance.BorderSize=0;Controls.Add(refresh);
+        Text="GPT 사용량";ClientSize=new Size(480,410);MinimumSize=MaximumSize=Size;FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;BackColor=bg;ForeColor=DetailsUi.Text;Font=new Font("맑은 고딕",10);ShowInTaskbar=true;
+        Controls.Add(new Label {Text="GPT Usage",Location=new Point(26,22),Size=new Size(420,34),Font=new Font("Segoe UI",20,FontStyle.Bold),ForeColor=DetailsUi.Text});
+        main=new Label {Location=new Point(27,62),Size=new Size(425,42),Font=new Font("맑은 고딕",22,FontStyle.Bold),Text="사용량 확인 중…",ForeColor=DetailsUi.Text};Controls.Add(main);
+        updated=new Label {Location=new Point(29,108),Size=new Size(420,24),ForeColor=muted};Controls.Add(updated);
+        windows=new DetailsCard {Location=new Point(24,145),Size=new Size(432,158)};Controls.Add(windows);
+        tokens=new Label {Location=new Point(27,317),Size=new Size(425,28),ForeColor=muted};Controls.Add(tokens);
+        refresh=new Button {Text="지금 새로고침",Location=new Point(306,354),Size=new Size(150,40)};DetailsUi.Button(refresh);Controls.Add(refresh);
         refresh.Click+=delegate {if(RefreshRequested!=null)RefreshRequested(this,EventArgs.Empty);};
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();}};
     }
@@ -167,15 +182,14 @@ class DetailsForm : Form {
         refresh.Enabled=true;double? remaining=snapshot.Remaining;
         main.Text=remaining.HasValue?"주간 남은 사용량  "+remaining.Value.ToString("0")+"%":"사용량 정보 없음";
         updated.Text="마지막 갱신  "+snapshot.Updated.ToString("yyyy-MM-dd HH:mm:ss");
-        windows.Controls.Clear();int y=12;
+        windows.Controls.Clear();int y=14;
         foreach(var item in snapshot.Windows) {
-            var label=new Label {Text=item.Name+"  "+item.Remaining.ToString("0")+"% 남음",Location=new Point(14,y),Size=new Size(190,24),ForeColor=Color.White};windows.Controls.Add(label);
+            var label=new Label {Text=item.Name+"  "+item.Remaining.ToString("0")+"% 남음",Location=new Point(18,y),Size=new Size(205,24),ForeColor=DetailsUi.Text,BackColor=surface,Font=new Font("맑은 고딕",10,FontStyle.Bold)};windows.Controls.Add(label);
             string reset=item.ResetLocal.HasValue?"초기화 "+item.ResetLocal.Value.ToString("MM/dd HH:mm"):"";
-            var resetLabel=new Label {Text=reset,Location=new Point(210,y),Size=new Size(170,24),TextAlign=ContentAlignment.MiddleRight,ForeColor=muted};windows.Controls.Add(resetLabel);
-            var track=new Panel {Location=new Point(14,y+28),Size=new Size(366,7),BackColor=Color.FromArgb(50,60,77)};windows.Controls.Add(track);
-            var fill=new Panel {Location=Point.Empty,Size=new Size((int)(366*item.Remaining/100),7),BackColor=UsageContext.ColorFor(item.Remaining)};track.Controls.Add(fill);y+=60;
+            var resetLabel=new Label {Text=reset,Location=new Point(225,y),Size=new Size(186,24),TextAlign=ContentAlignment.MiddleRight,ForeColor=muted,BackColor=surface};windows.Controls.Add(resetLabel);
+            windows.Controls.Add(new DetailsBar {Location=new Point(18,y+31),Size=new Size(393,10),Remaining=item.Remaining});y+=64;
         }
-        if(snapshot.Windows.Count==0)windows.Controls.Add(new Label {Text="현재 계정에서 한도 정보를 제공하지 않습니다.",Location=new Point(14,18),Size=new Size(365,30),ForeColor=muted});
+        if(snapshot.Windows.Count==0)windows.Controls.Add(new Label {Text="현재 계정에서 한도 정보를 제공하지 않습니다.",Location=new Point(18,20),Size=new Size(395,30),ForeColor=muted,BackColor=surface});
         tokens.Text="오늘 토큰  "+FormatTokens(snapshot.TodayTokens)+"     누적 토큰  "+FormatTokens(snapshot.LifetimeTokens);
     }
     static string FormatTokens(long? value){if(!value.HasValue)return "—";if(value.Value>=1000000000)return (value.Value/1000000000.0).ToString("0.00")+"B";if(value.Value>=1000000)return (value.Value/1000000.0).ToString("0.0")+"M";if(value.Value>=1000)return (value.Value/1000.0).ToString("0.0")+"K";return value.Value.ToString();}

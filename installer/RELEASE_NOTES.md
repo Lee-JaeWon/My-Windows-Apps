@@ -1,4 +1,4 @@
-## My Windows Apps Setup v1.0.5
+## My Windows Apps Setup v1.0.6
 
 Windows 10/11용 단일 설치 파일입니다.
 
@@ -18,6 +18,7 @@ Windows 10/11용 단일 설치 파일입니다.
 - One 화면에서 GPU 메모리를 최대 4열 원형 게이지로 표시하고 Usage·온도를 함께 표시
 - 선택한 Lab 화면 모드를 다음 실행에도 유지
 - 앱 내부 좌상단의 빨강·노랑·초록 장식점 제거
+- GPT Usage Tray의 상세 사용량 창을 다른 앱과 같은 둥근 카드 디자인으로 개선
 - 서버 로그인 정보는 설치 후 각 PC에서 입력하며 설치 파일에는 포함되지 않음
 
 `My Windows Apps Setup.exe` 하나를 내려받아 실행하면 됩니다.
