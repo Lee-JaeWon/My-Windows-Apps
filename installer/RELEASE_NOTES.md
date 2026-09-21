@@ -1,6 +1,9 @@
-## My Windows Apps Setup v1.0.6
+## My Windows Apps Setup v1.0.7
 
 Windows 10/11용 단일 설치 파일입니다.
+
+- Lab 창을 좁힐 때 제목과 모드 버튼이 겹치던 문제 수정
+- 좁은 창에서 서버 카드 너비를 맞추고 List 화면을 한 열로 전환
 
 - GIF Generator, Lab Server Monitor, GPT Usage Tray 중 원하는 앱 선택 설치
 - FFmpeg, FFprobe, Plink 포함

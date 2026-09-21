@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyVersion("1.2.2.0")]
 
 static class Ui {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
@@ -283,13 +283,15 @@ class ServerCard : Control {
     protected override void Dispose(bool disposing){if(disposing){hostFont.Dispose();labelFont.Dispose();valueFont.Dispose();ringFont.Dispose();smallFont.Dispose();}base.Dispose(disposing);}
 }
 class MonitorForm : Form {
+    readonly Label titleLabel=new Label(),subtitleLabel=new Label();
     readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer {Interval=1000};readonly List<Session> sessions=new List<Session>();readonly List<ServerCard> cards=new List<ServerCard>();
     readonly FlowLayoutPanel area=new FlowLayoutPanel();readonly string directory;readonly Sample previewData;readonly ModeToggle toggle=new ModeToggle();ServerViewMode mode=ServerViewMode.List;
     public MonitorForm(string configDirectory):this(configDirectory,null){}
     public MonitorForm(string configDirectory,Sample preview) {
         directory=configDirectory;previewData=preview;Text="Lab Server Monitor";ClientSize=new Size(1000,680);MinimumSize=new Size(820,670);StartPosition=FormStartPosition.CenterScreen;BackColor=Ui.Background;ForeColor=Ui.Text;Font=new Font("맑은 고딕",10);AutoScaleMode=AutoScaleMode.Dpi;Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        Controls.Add(new Label {Text="Lab Server Monitor",Location=new Point(24,43),Size=new Size(560,42),Font=new Font("Segoe UI",23,FontStyle.Bold)});
-        Controls.Add(new Label {Text="GPU와 RAM 상태를 1초마다 확인합니다",Location=new Point(26,87),Size=new Size(560,25),ForeColor=Ui.Muted});
+        DoubleBuffered=true;SetStyle(ControlStyles.ResizeRedraw,true);
+        titleLabel.Text="Lab Server Monitor";titleLabel.Location=new Point(24,43);titleLabel.Size=new Size(560,42);titleLabel.Font=new Font("Segoe UI",23,FontStyle.Bold);titleLabel.AutoEllipsis=true;Controls.Add(titleLabel);
+        subtitleLabel.Text="GPU와 RAM 상태를 1초마다 확인합니다";subtitleLabel.Location=new Point(26,87);subtitleLabel.Size=new Size(560,25);subtitleLabel.ForeColor=Ui.Muted;subtitleLabel.AutoEllipsis=true;Controls.Add(subtitleLabel);
         var loginManager=new Button {Text="로그인 관리",Size=new Size(116,36),Location=new Point(ClientSize.Width-140,32),Anchor=AnchorStyles.Top|AnchorStyles.Right};Ui.StyleButton(loginManager,Ui.Surface2);Controls.Add(loginManager);
         toggle.Location=new Point(ClientSize.Width-328,32);toggle.Anchor=AnchorStyles.Top|AnchorStyles.Right;Controls.Add(toggle);
         area.Location=new Point(16,126);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-142);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;area.FlowDirection=FlowDirection.LeftToRight;area.TabStop=true;area.BackColor=Ui.Background;Controls.Add(area);
@@ -297,9 +299,10 @@ class MonitorForm : Form {
         LoadMode();ReloadServers();timer.Tick+=delegate {LayoutCards();foreach(var card in cards)card.Invalidate();};timer.Start();FormClosed+=delegate {timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
     }
     string ModePath {get{return Path.Combine(directory,"view-mode.txt");}}
+    protected override void OnLayout(LayoutEventArgs e){base.OnLayout(e);if(titleLabel==null||subtitleLabel==null||toggle==null||toggle.Parent==null)return;int gap=Math.Max(12,titleLabel.Left/2);int right=toggle.Left-gap;titleLabel.Width=Math.Max(1,right-titleLabel.Left);subtitleLabel.Width=Math.Max(1,right-subtitleLabel.Left);}
     void LoadMode(){try{if(File.Exists(ModePath)&&File.ReadAllText(ModePath).Trim()=="One")mode=ServerViewMode.One;}catch{}toggle.Mode=mode;}
     void SaveMode(){try{Directory.CreateDirectory(directory);File.WriteAllText(ModePath,mode.ToString());}catch{}}
-    void LayoutCards(){if(cards.Count==0)return;int available=Math.Max(720,area.ClientSize.Width-24);int width=mode==ServerViewMode.One?available:Math.Max(370,(available-28)/2);foreach(var card in cards){card.Mode=mode;card.Width=width;int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Margin=new Padding(8,0,8,14);}}
+    void LayoutCards(){if(cards.Count==0)return;int available=Math.Max(1,area.Width-SystemInformation.VerticalScrollBarWidth-2);int columns=mode==ServerViewMode.List&&available>=772?2:1;int width=Math.Max(1,available/columns-16);foreach(var card in cards){card.Mode=mode;card.Width=width;int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Margin=new Padding(8,0,8,14);}}
     void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;var session=previewData==null?new Session(server,directory):new Session(server,previewData);sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. ‘로그인 관리’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});LayoutCards();}
     void SetModeCore(ServerViewMode value){mode=value;toggle.Mode=value;LayoutCards();}
     public void ShowOnePreview(){SetModeCore(ServerViewMode.One);}
@@ -322,13 +325,13 @@ class Program {
             try {using(var form=new LoginManagerForm(previewDirectory)){form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}}
             catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}return 0;
         }
-        if(args.Length==2&&args[0]=="--one-ui-test") {
+        if(args.Length==2&&(args[0]=="--one-ui-test"||args[0]=="--narrow-ui-test")) {
             string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-One-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
             try {
                 var server=new ServerConfig {Host="gpu-lab.example",User="researcher",HostKey="preview",PasswordFile="preview.txt"};ConfigStore.Save(previewDirectory,new []{server});
                 var gpus=new List<Gpu>();for(int i=0;i<8;i++)gpus.Add(new Gpu {index=i.ToString(),name="NVIDIA GPU",used=8200+i*1350,total=49152,utilization=18+i*9,temperature=47+i*2});
                 var sample=new Sample {gpus=gpus.ToArray(),ram_used=96256,ram_total=256000};
-                using(var form=new MonitorForm(previewDirectory,sample)){form.ShowOnePreview();form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}
+                using(var form=new MonitorForm(previewDirectory,sample)){form.ShowOnePreview();form.Show();Application.DoEvents();if(args[0]=="--narrow-ui-test"){form.Width=form.MinimumSize.Width;Application.DoEvents();}using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}
             } catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}finally{try{Directory.Delete(previewDirectory,true);}catch{}}return 0;
         }
         string directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LabServerMonitor");
