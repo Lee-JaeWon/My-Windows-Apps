@@ -4,8 +4,8 @@ Codex에 로그인된 ChatGPT 계정의 사용량을 Windows 알림 영역에 �
 
 - 작업표시줄 위젯: 작업표시줄 맨 왼쪽에 배경 없이 색상 원형 바와 숫자 표시
 - 숫자 색상: Windows 다크 모드에서는 흰색, 라이트 모드에서는 검정으로 자동 전환
-- 색상: 잔여량이 줄어들수록 초록 → 노랑 → 빨강으로 변화
-- 위젯 클릭: 단기/주간 잔여량, 초기화 시각, 오늘·누적 토큰 표시
+- 색상: 상세 창에서 무지개 모드(잔여량에 따라 변화) 또는 슬라이더로 단일색 선택, 자동 저장
+- 위젯 클릭: 숫자 주변을 포함한 원 내부를 누르면 잔여량, 초기화 시각, 토큰과 색상 설정 표시
 - 위젯 우클릭: 상세 보기, 새로고침 또는 앱 종료
 - 60초마다 자동 갱신
 - Windows 로그인 시 자동 실행
@@ -17,6 +17,6 @@ Codex가 설치되어 있고 ChatGPT 계정으로 로그인되어 있어야 합�
 
 ## 설치
 
-GitHub Release의 ZIP을 내려받아 압축을 푼 뒤 **설치.cmd**를 실행합니다. `%LOCALAPPDATA%\Programs\GPTUsageTray`에 설치되고 바탕화면 바로가기와 Windows 자동 실행이 설정됩니다.
+GitHub 최신 릴리스의 **My Windows Apps Setup.exe**를 실행하고 GPT Usage Tray를 선택해 설치합니다. `%LOCALAPPDATA%\Programs\GPTUsageTray`에 설치되고 바탕화면 바로가기와 Windows 자동 실행이 설정됩니다.
 
 개인 제작 앱으로 코드 서명이 없습니다. Windows Smart App Control이 켜진 PC에서는 실행을 차단할 수 있습니다.

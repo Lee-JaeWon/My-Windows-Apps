@@ -19,7 +19,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("GPT Usage Tray")]
 [assembly: AssemblyProduct("GPT Usage Tray")]
 [assembly: AssemblyDescription("Codex usage in the Windows notification area")]
-[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
 
 class UsageWindow {
     public string Name;
@@ -147,6 +147,26 @@ static class CodexUsageReader {
     }
 }
 
+static class WidgetColors {
+    public static bool Single;public static int Hue=130;
+    static readonly string Settings=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GPTUsageTray","widget-color.txt");
+    static WidgetColors(){try{string[] values=File.ReadAllLines(Settings);int hue;if(values.Length==2&&int.TryParse(values[1],out hue)&&hue>=0&&hue<=359){Single=values[0]=="single";Hue=hue;}}catch{}}
+    public static void Save(){try{Directory.CreateDirectory(Path.GetDirectoryName(Settings));File.WriteAllLines(Settings,new[]{Single?"single":"rainbow",Hue.ToString()});}catch{}}
+    public static Color FromHue(double hue){hue=((hue%360)+360)%360;double c=0.64,x=c*(1-Math.Abs(hue/60%2-1)),m=0.22,r=0,g=0,b=0;if(hue<60){r=c;g=x;}else if(hue<120){r=x;g=c;}else if(hue<180){g=c;b=x;}else if(hue<240){g=x;b=c;}else if(hue<300){r=x;b=c;}else{r=c;b=x;}return Color.FromArgb((int)((r+m)*255),(int)((g+m)*255),(int)((b+m)*255));}
+}
+class WidgetHueSlider : Control {
+    int hue;public event EventHandler ValueChanged;
+    public int Hue{get{return hue;}set{value=Math.Max(0,Math.Min(359,value));if(value==hue)return;hue=value;Invalidate();if(ValueChanged!=null)ValueChanged(this,EventArgs.Empty);}}
+    public WidgetHueSlider(){DoubleBuffered=true;TabStop=true;Cursor=Cursors.Hand;AccessibleName="위젯 단일 색상";AccessibleRole=AccessibleRole.Slider;BackColor=DetailsUi.Surface;}
+    void Pick(int x){Hue=(int)(Math.Max(0,Math.Min(1,(x-10.0)/Math.Max(1,Width-20)))*359);}
+    protected override void OnMouseDown(MouseEventArgs e){base.OnMouseDown(e);if(e.Button==MouseButtons.Left){Focus();Capture=true;Pick(e.X);}}
+    protected override void OnMouseMove(MouseEventArgs e){base.OnMouseMove(e);if(Capture&&e.Button==MouseButtons.Left)Pick(e.X);}
+    protected override void OnMouseUp(MouseEventArgs e){base.OnMouseUp(e);if(e.Button==MouseButtons.Left)Capture=false;}
+    protected override bool IsInputKey(Keys key){return key==Keys.Left||key==Keys.Right||base.IsInputKey(key);}
+    protected override void OnKeyDown(KeyEventArgs e){base.OnKeyDown(e);if(e.KeyCode==Keys.Left){Hue--;e.Handled=true;}if(e.KeyCode==Keys.Right){Hue++;e.Handled=true;}}
+    protected override void OnPaint(PaintEventArgs e){var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;int y=Height/2;var r=new Rectangle(10,y-4,Math.Max(1,Width-20),8);using(var p=DetailsUi.Round(r,4))using(var b=new LinearGradientBrush(r,Color.Red,Color.Red,0f)){var colors=new Color[7];var positions=new float[7];for(int i=0;i<7;i++){colors[i]=WidgetColors.FromHue(i*60);positions[i]=i/6f;}b.InterpolationColors=new ColorBlend{Colors=colors,Positions=positions};g.FillPath(b,p);}float x=10+(Width-20)*hue/359f;using(var b=new SolidBrush(WidgetColors.FromHue(hue)))g.FillEllipse(b,x-7,y-7,14,14);using(var p=new Pen(Color.White,2))g.DrawEllipse(p,x-7,y-7,14,14);if(Focused)ControlPaint.DrawFocusRectangle(g,ClientRectangle);}
+}
+
 static class DetailsUi {
     public static readonly Color Background=Color.FromArgb(14,18,16),Surface=Color.FromArgb(27,35,30),Surface2=Color.FromArgb(35,46,39),Text=Color.FromArgb(244,247,245),Muted=Color.FromArgb(158,171,162),Accent=Color.FromArgb(113,190,126);
     public static GraphicsPath Round(Rectangle r,int radius){var p=new GraphicsPath();int d=radius*2;p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
@@ -162,17 +182,26 @@ class DetailsBar : Control {
 }
 
 class DetailsForm : Form {
+    readonly System.Windows.Forms.Timer colorSaveTimer=new System.Windows.Forms.Timer {Interval=350};
+    public event EventHandler ColorsChanged;
     Label main,updated,tokens;Panel windows;Button refresh;
     readonly Color bg=DetailsUi.Background,surface=DetailsUi.Surface,muted=DetailsUi.Muted;
     public event EventHandler RefreshRequested;
     public DetailsForm() {
-        Text="GPT 사용량";ClientSize=new Size(480,410);MinimumSize=MaximumSize=Size;FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;BackColor=bg;ForeColor=DetailsUi.Text;Font=new Font("맑은 고딕",10);ShowInTaskbar=true;
+        Text="GPT 사용량";ClientSize=new Size(480,550);MinimumSize=MaximumSize=Size;FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;BackColor=bg;ForeColor=DetailsUi.Text;Font=new Font("맑은 고딕",10);ShowInTaskbar=true;
         Controls.Add(new Label {Text="GPT Usage",Location=new Point(26,22),Size=new Size(420,34),Font=new Font("Segoe UI",20,FontStyle.Bold),ForeColor=DetailsUi.Text});
         main=new Label {Location=new Point(27,62),Size=new Size(425,42),Font=new Font("맑은 고딕",22,FontStyle.Bold),Text="사용량 확인 중…",ForeColor=DetailsUi.Text};Controls.Add(main);
         updated=new Label {Location=new Point(29,108),Size=new Size(420,24),ForeColor=muted};Controls.Add(updated);
         windows=new DetailsCard {Location=new Point(24,145),Size=new Size(432,158)};Controls.Add(windows);
         tokens=new Label {Location=new Point(27,317),Size=new Size(425,28),ForeColor=muted};Controls.Add(tokens);
-        refresh=new Button {Text="지금 새로고침",Location=new Point(306,354),Size=new Size(150,40)};DetailsUi.Button(refresh);Controls.Add(refresh);
+        var colors=new DetailsCard {Location=new Point(24,354),Size=new Size(432,128)};Controls.Add(colors);
+        var rainbow=new RadioButton {Text="무지개 모드",Location=new Point(18,12),Size=new Size(170,28),Checked=!WidgetColors.Single};var single=new RadioButton {Text="단일색 선택",Location=new Point(224,12),Size=new Size(184,28),Checked=WidgetColors.Single};colors.Controls.Add(rainbow);colors.Controls.Add(single);
+        var hue=new WidgetHueSlider {Location=new Point(16,47),Size=new Size(398,30),Hue=WidgetColors.Hue};colors.Controls.Add(hue);
+        var colorHint=new Label {Location=new Point(18,88),Size=new Size(396,25),ForeColor=muted};colors.Controls.Add(colorHint);
+        Action updateColors=delegate{WidgetColors.Single=single.Checked;WidgetColors.Hue=hue.Hue;colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량에 따라 무지개 색상이 자동으로 바뀝니다";windows.Invalidate(true);colorSaveTimer.Stop();colorSaveTimer.Start();if(ColorsChanged!=null)ColorsChanged(this,EventArgs.Empty);};
+        rainbow.CheckedChanged+=delegate{if(rainbow.Checked)updateColors();};single.CheckedChanged+=delegate{if(single.Checked)updateColors();};hue.ValueChanged+=delegate{single.Checked=true;updateColors();};colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량에 따라 무지개 색상이 자동으로 바뀝니다";
+        colorSaveTimer.Tick+=delegate{colorSaveTimer.Stop();WidgetColors.Save();};
+        refresh=new Button {Text="지금 새로고침",Location=new Point(306,496),Size=new Size(150,40)};DetailsUi.Button(refresh);Controls.Add(refresh);
         refresh.Click+=delegate {if(RefreshRequested!=null)RefreshRequested(this,EventArgs.Empty);};
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();}};
     }
@@ -193,6 +222,7 @@ class DetailsForm : Form {
         tokens.Text="오늘 토큰  "+FormatTokens(snapshot.TodayTokens)+"     누적 토큰  "+FormatTokens(snapshot.LifetimeTokens);
     }
     static string FormatTokens(long? value){if(!value.HasValue)return "—";if(value.Value>=1000000000)return (value.Value/1000000000.0).ToString("0.00")+"B";if(value.Value>=1000000)return (value.Value/1000000.0).ToString("0.0")+"M";if(value.Value>=1000)return (value.Value/1000.0).ToString("0.0")+"K";return value.Value.ToString();}
+    protected override void Dispose(bool disposing){if(disposing){if(colorSaveTimer.Enabled)WidgetColors.Save();colorSaveTimer.Dispose();}base.Dispose(disposing);}
 }
 
 class UsageWidgetForm : Form {
@@ -250,6 +280,9 @@ class UsageWidgetForm : Form {
     public Bitmap CreateGaugeBitmap() {
         var bitmap=new Bitmap(Width,Height,PixelFormat.Format32bppPArgb);using(Graphics g=Graphics.FromImage(bitmap)) {
         g.Clear(Color.Transparent);g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        // Layered windows pass clicks through alpha-zero pixels. An imperceptible
+        // interior fill makes the whole circle clickable, including around digits.
+        using(var hitArea=new SolidBrush(Color.FromArgb(1,0,0,0)))g.FillEllipse(hitArea,1,1,Width-2,Height-2);
         double value=remaining.HasValue?Math.Max(0,Math.Min(100,remaining.Value)):0;
         Color color=remaining.HasValue?UsageContext.ColorFor(value):Color.FromArgb(125,135,150);
         RectangleF ring=new RectangleF(4,4,36,36);
@@ -318,8 +351,7 @@ class UsageContext : ApplicationContext {
     }
     public static Color ColorFor(double remaining){
         remaining=Math.Max(0,Math.Min(100,remaining));
-        if(remaining<50)return Blend(Color.FromArgb(239,68,68),Color.FromArgb(250,190,55),remaining/50.0);
-        return Blend(Color.FromArgb(250,190,55),Color.FromArgb(76,222,128),(remaining-50)/50.0);
+        return WidgetColors.FromHue(WidgetColors.Single?WidgetColors.Hue:remaining*3);
     }
     static Color Blend(Color from,Color to,double amount){return Color.FromArgb((int)(from.R+(to.R-from.R)*amount),(int)(from.G+(to.G-from.G)*amount),(int)(from.B+(to.B-from.B)*amount));}
     void Refresh() {
@@ -335,7 +367,7 @@ class UsageContext : ApplicationContext {
         if(widget!=null)widget.UpdateData(snapshot);
     }
     void SetError(string error){if(details!=null)details.ShowError(error);if(widget!=null)widget.ShowError();}
-    void ShowDetails(){if(details==null){details=new DetailsForm();details.RefreshRequested+=delegate{Refresh();};}if(current!=null)details.UpdateData(current);details.Show();details.WindowState=FormWindowState.Normal;details.Activate();}
+    void ShowDetails(){if(details==null){details=new DetailsForm();details.RefreshRequested+=delegate{Refresh();};details.ColorsChanged+=delegate{if(current!=null)widget.UpdateData(current);};}if(current!=null)details.UpdateData(current);details.Show();details.WindowState=FormWindowState.Normal;details.Activate();}
     void SetStartup(bool enabled){using(var key=Registry.CurrentUser.CreateSubKey(RunKey)){if(enabled)key.SetValue(RunName,"\""+Application.ExecutablePath+"\"");else key.DeleteValue(RunName,false);}}
     void Exit(){timer.Stop();if(details!=null)details.Dispose();if(widget!=null)widget.Dispose();ExitThread();}
     static void TrimWorkingSet(){try{using(var process=Process.GetCurrentProcess())SetProcessWorkingSetSize(process.Handle,new IntPtr(-1),new IntPtr(-1));}catch{}}
