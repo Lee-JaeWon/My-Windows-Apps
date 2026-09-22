@@ -19,7 +19,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("GPT Usage Tray")]
 [assembly: AssemblyProduct("GPT Usage Tray")]
 [assembly: AssemblyDescription("Codex usage in the Windows notification area")]
-[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.1.0")]
 
 class UsageWindow {
     public string Name;
@@ -151,7 +151,7 @@ static class WidgetColors {
     public static bool Single;public static int Hue=130;
     static readonly string Settings=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GPTUsageTray","widget-color.txt");
     static WidgetColors(){try{string[] values=File.ReadAllLines(Settings);int hue;if(values.Length==2&&int.TryParse(values[1],out hue)&&hue>=0&&hue<=359){Single=values[0]=="single";Hue=hue;}}catch{}}
-    public static void Save(){try{Directory.CreateDirectory(Path.GetDirectoryName(Settings));File.WriteAllLines(Settings,new[]{Single?"single":"rainbow",Hue.ToString()});}catch{}}
+    public static void Save(){try{Directory.CreateDirectory(Path.GetDirectoryName(Settings));File.WriteAllLines(Settings,new[]{Single?"single":"remaining",Hue.ToString()});}catch{}}
     public static Color FromHue(double hue){hue=((hue%360)+360)%360;double c=0.64,x=c*(1-Math.Abs(hue/60%2-1)),m=0.22,r=0,g=0,b=0;if(hue<60){r=c;g=x;}else if(hue<120){r=x;g=c;}else if(hue<180){g=c;b=x;}else if(hue<240){g=x;b=c;}else if(hue<300){r=x;b=c;}else{r=c;b=x;}return Color.FromArgb((int)((r+m)*255),(int)((g+m)*255),(int)((b+m)*255));}
 }
 class WidgetHueSlider : Control {
@@ -195,11 +195,11 @@ class DetailsForm : Form {
         windows=new DetailsCard {Location=new Point(24,145),Size=new Size(432,158)};Controls.Add(windows);
         tokens=new Label {Location=new Point(27,317),Size=new Size(425,28),ForeColor=muted};Controls.Add(tokens);
         var colors=new DetailsCard {Location=new Point(24,354),Size=new Size(432,128)};Controls.Add(colors);
-        var rainbow=new RadioButton {Text="무지개 모드",Location=new Point(18,12),Size=new Size(170,28),Checked=!WidgetColors.Single};var single=new RadioButton {Text="단일색 선택",Location=new Point(224,12),Size=new Size(184,28),Checked=WidgetColors.Single};colors.Controls.Add(rainbow);colors.Controls.Add(single);
+        var remainingMode=new RadioButton {Text="잔여량 모드",Location=new Point(18,12),Size=new Size(170,28),Checked=!WidgetColors.Single};var single=new RadioButton {Text="단일색 선택",Location=new Point(224,12),Size=new Size(184,28),Checked=WidgetColors.Single};colors.Controls.Add(remainingMode);colors.Controls.Add(single);
         var hue=new WidgetHueSlider {Location=new Point(16,47),Size=new Size(398,30),Hue=WidgetColors.Hue};colors.Controls.Add(hue);
         var colorHint=new Label {Location=new Point(18,88),Size=new Size(396,25),ForeColor=muted};colors.Controls.Add(colorHint);
-        Action updateColors=delegate{WidgetColors.Single=single.Checked;WidgetColors.Hue=hue.Hue;colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량에 따라 무지개 색상이 자동으로 바뀝니다";windows.Invalidate(true);colorSaveTimer.Stop();colorSaveTimer.Start();if(ColorsChanged!=null)ColorsChanged(this,EventArgs.Empty);};
-        rainbow.CheckedChanged+=delegate{if(rainbow.Checked)updateColors();};single.CheckedChanged+=delegate{if(single.Checked)updateColors();};hue.ValueChanged+=delegate{single.Checked=true;updateColors();};colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량에 따라 무지개 색상이 자동으로 바뀝니다";
+        Action updateColors=delegate{WidgetColors.Single=single.Checked;WidgetColors.Hue=hue.Hue;colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량이 줄면 초록 → 노랑 → 빨강으로 바뀝니다";windows.Invalidate(true);colorSaveTimer.Stop();colorSaveTimer.Start();if(ColorsChanged!=null)ColorsChanged(this,EventArgs.Empty);};
+        remainingMode.CheckedChanged+=delegate{if(remainingMode.Checked)updateColors();};single.CheckedChanged+=delegate{if(single.Checked)updateColors();};hue.ValueChanged+=delegate{single.Checked=true;updateColors();};colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량이 줄면 초록 → 노랑 → 빨강으로 바뀝니다";
         colorSaveTimer.Tick+=delegate{colorSaveTimer.Stop();WidgetColors.Save();};
         refresh=new Button {Text="지금 새로고침",Location=new Point(306,496),Size=new Size(150,40)};DetailsUi.Button(refresh);Controls.Add(refresh);
         refresh.Click+=delegate {if(RefreshRequested!=null)RefreshRequested(this,EventArgs.Empty);};
@@ -351,7 +351,9 @@ class UsageContext : ApplicationContext {
     }
     public static Color ColorFor(double remaining){
         remaining=Math.Max(0,Math.Min(100,remaining));
-        return WidgetColors.FromHue(WidgetColors.Single?WidgetColors.Hue:remaining*3);
+        if(WidgetColors.Single)return WidgetColors.FromHue(WidgetColors.Hue);
+        if(remaining<50)return Blend(Color.FromArgb(239,68,68),Color.FromArgb(250,190,55),remaining/50.0);
+        return Blend(Color.FromArgb(250,190,55),Color.FromArgb(76,222,128),(remaining-50)/50.0);
     }
     static Color Blend(Color from,Color to,double amount){return Color.FromArgb((int)(from.R+(to.R-from.R)*amount),(int)(from.G+(to.G-from.G)*amount),(int)(from.B+(to.B-from.B)*amount));}
     void Refresh() {

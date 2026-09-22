@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
 
 static class Ui {
     public static Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
@@ -128,7 +128,7 @@ class LoginManagerForm : Form {
     readonly ListBox list=new ListBox();readonly TextBox host=new TextBox(),user=new TextBox(),password=new TextBox(),hostKey=new TextBox();
     int selected=-1;public bool Changed {get;private set;}
     public LoginManagerForm(string configDirectory) {
-        directory=configDirectory;Text="로그인 관리";ClientSize=new Size(720,430);MinimumSize=MaximumSize=Size;StartPosition=FormStartPosition.CenterParent;
+        directory=configDirectory;Text="Login Manager";ClientSize=new Size(720,430);MinimumSize=MaximumSize=Size;StartPosition=FormStartPosition.CenterParent;
         FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;BackColor=Ui.Background;ForeColor=Ui.Text;Font=new Font("맑은 고딕",10);
         Controls.Add(new Label {Text="저장된 로그인",Location=new Point(20,18),Size=new Size(220,26),Font=new Font("맑은 고딕",12,FontStyle.Bold)});
         list.Location=new Point(20,52);list.Size=new Size(235,292);list.BackColor=Ui.Surface;list.ForeColor=Ui.Text;list.BorderStyle=BorderStyle.None;list.ItemHeight=30;Controls.Add(list);
@@ -160,7 +160,7 @@ class LoginManagerForm : Form {
     void ClearFields(){list.ClearSelected();selected=-1;host.Text="";user.Text="";password.Text="";hostKey.Text="";host.Focus();}
     void SaveCurrent() {
         string hostValue=host.Text.Trim(),userValue=user.Text.Trim(),keyValue=hostKey.Text.Trim();
-        if(hostValue.Length==0||userValue.Length==0||password.Text.Length==0||keyValue.Length==0){MessageBox.Show(this,"서버 주소, 사용자 이름, 비밀번호, 서버 키 지문을 모두 입력해 주세요.","로그인 관리");return;}
+        if(hostValue.Length==0||userValue.Length==0||password.Text.Length==0||keyValue.Length==0){MessageBox.Show(this,"서버 주소, 사용자 이름, 비밀번호, 서버 키 지문을 모두 입력해 주세요.","Login Manager");return;}
         ServerConfig item;
         if(selected>=0&&selected<servers.Count)item=servers[selected];else {item=new ServerConfig {PasswordFile="login-"+Guid.NewGuid().ToString("N")+".password.txt"};servers.Add(item);selected=servers.Count-1;}
         int savedIndex=selected;
@@ -169,7 +169,7 @@ class LoginManagerForm : Form {
     }
     void RemoveSelected() {
         if(selected<0||selected>=servers.Count)return;var item=servers[selected];
-        if(MessageBox.Show(this,"이 로그인을 삭제할까요?", "로그인 관리",MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
+        if(MessageBox.Show(this,"이 로그인을 삭제할까요?", "Login Manager",MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
         servers.RemoveAt(selected);ConfigStore.Save(directory,servers);
         if(!string.IsNullOrWhiteSpace(item.PasswordFile)){string path=Path.Combine(directory,item.PasswordFile);if(File.Exists(path))File.Delete(path);}
         Changed=true;LoadList();
@@ -316,9 +316,9 @@ class MonitorForm : Form {
         DoubleBuffered=true;SetStyle(ControlStyles.ResizeRedraw,true);
         titleLabel.Text="Lab Server Monitor";titleLabel.Location=new Point(24,43);titleLabel.Size=new Size(560,42);titleLabel.Font=new Font("Segoe UI",23,FontStyle.Bold);titleLabel.AutoEllipsis=true;Controls.Add(titleLabel);
         subtitleLabel.Text="GPU와 RAM 상태를 1초마다 확인합니다";subtitleLabel.Location=new Point(26,87);subtitleLabel.Size=new Size(560,25);subtitleLabel.ForeColor=Ui.Muted;subtitleLabel.AutoEllipsis=true;Controls.Add(subtitleLabel);
-        var loginManager=new Button {Text="로그인 관리",Size=new Size(116,36),Location=new Point(ClientSize.Width-140,32),Anchor=AnchorStyles.Top|AnchorStyles.Right};Ui.StyleButton(loginManager,Ui.Surface2);Controls.Add(loginManager);
+        var loginManager=new Button {Text="Login Manager",Size=new Size(116,36),Location=new Point(ClientSize.Width-140,32),Anchor=AnchorStyles.Top|AnchorStyles.Right};Ui.StyleButton(loginManager,Ui.Surface2);Controls.Add(loginManager);
         toggle.Location=new Point(ClientSize.Width-328,32);toggle.Anchor=AnchorStyles.Top|AnchorStyles.Right;toggle.BackColor=Ui.Background;Controls.Add(toggle);
-        hueButton.Text="색조";hueButton.Location=new Point(ClientSize.Width-140,78);hueButton.Size=new Size(116,32);hueButton.Anchor=AnchorStyles.Top|AnchorStyles.Right;Ui.StyleButton(hueButton,Ui.Surface2);Controls.Add(hueButton);hueButton.Click+=delegate{ToggleHueEditor();};
+        hueButton.Text="Color";hueButton.Location=new Point(ClientSize.Width-140,78);hueButton.Size=new Size(116,32);hueButton.Anchor=AnchorStyles.Top|AnchorStyles.Right;Ui.StyleButton(hueButton,Ui.Surface2);Controls.Add(hueButton);hueButton.Click+=delegate{ToggleHueEditor();};
         hueEditor.Location=new Point(ClientSize.Width-328,122);hueEditor.Size=new Size(304,44);hueEditor.BackColor=Ui.Surface;hueEditor.Anchor=AnchorStyles.Top|AnchorStyles.Right;hueEditor.Visible=false;Controls.Add(hueEditor);
         hueSlider.Location=new Point(10,8);hueSlider.Size=new Size(242,28);hueSlider.BackColor=Ui.Surface;hueSlider.Hue=Ui.Hue;hueEditor.Controls.Add(hueSlider);
         var resetHue=new Button {Text="↺",Location=new Point(262,8),Size=new Size(32,28),AccessibleName="기본 초록색 복원"};Ui.StyleButton(resetHue,Ui.Surface2);resetHue.Click+=delegate{hueSlider.Hue=130;};hueEditor.Controls.Add(resetHue);
@@ -328,14 +328,14 @@ class MonitorForm : Form {
         LoadMode();ReloadServers();timer.Tick+=delegate {LayoutCards();foreach(var card in cards)card.Invalidate();};timer.Start();FormClosed+=delegate {if(themeSaveTimer.Enabled)SaveTheme();themeSaveTimer.Stop();themeSaveTimer.Dispose();timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
     }
     void SaveTheme(){try{Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"theme-hue.txt"),Ui.Hue.ToString());}catch{}}
-    void ToggleHueEditor(){int shift=hueEditor.Height+Math.Max(8,hueEditor.Height/4);SuspendLayout();hueEditorOpen=!hueEditorOpen;hueEditor.Visible=hueEditorOpen;area.Top+=hueEditorOpen?shift:-shift;area.Height+=hueEditorOpen?-shift:shift;hueButton.Text=hueEditorOpen?"색조 ▴":"색조";ResumeLayout(true);if(hueEditorOpen)hueSlider.Focus();}
+    void ToggleHueEditor(){int shift=hueEditor.Height+Math.Max(8,hueEditor.Height/4);SuspendLayout();hueEditorOpen=!hueEditorOpen;hueEditor.Visible=hueEditorOpen;area.Top+=hueEditorOpen?shift:-shift;area.Height+=hueEditorOpen?-shift:shift;hueButton.Text=hueEditorOpen?"Color ▴":"Color";ResumeLayout(true);if(hueEditorOpen)hueSlider.Focus();}
     public void PreviewHue(int hue){if(!hueEditorOpen)ToggleHueEditor();int expandedTop=area.Top;ToggleHueEditor();if(hueEditorOpen||area.Top>=expandedTop)throw new Exception("Color editor collapse failed");ToggleHueEditor();if(!hueEditorOpen||area.Top!=expandedTop||(Visible&&!hueEditor.Visible))throw new Exception("Color editor expand failed");hueSlider.Hue=hue;SaveTheme();}
     string ModePath {get{return Path.Combine(directory,"view-mode.txt");}}
     protected override void OnLayout(LayoutEventArgs e){base.OnLayout(e);if(titleLabel==null||subtitleLabel==null||toggle==null||toggle.Parent==null)return;int gap=Math.Max(12,titleLabel.Left/2);int right=toggle.Left-gap;titleLabel.Width=Math.Max(1,right-titleLabel.Left);subtitleLabel.Width=Math.Max(1,right-subtitleLabel.Left);}
     void LoadMode(){try{if(File.Exists(ModePath)&&File.ReadAllText(ModePath).Trim()=="One")mode=ServerViewMode.One;}catch{}toggle.Mode=mode;}
     void SaveMode(){try{Directory.CreateDirectory(directory);File.WriteAllText(ModePath,mode.ToString());}catch{}}
     void LayoutCards(){if(cards.Count==0)return;int available=Math.Max(1,area.ClientSize.Width-SystemInformation.VerticalScrollBarWidth-8);int columns=mode==ServerViewMode.List&&available>=772?2:1;int width=Math.Max(1,available/columns-16);foreach(var card in cards){card.Mode=mode;card.Width=width;int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Margin=new Padding(8,0,8,14);}}
-    void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;var session=previewData==null?new Session(server,directory):new Session(server,previewData);sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. ‘로그인 관리’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});LayoutCards();}
+    void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;var session=previewData==null?new Session(server,directory):new Session(server,previewData);sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. ‘Login Manager’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});LayoutCards();}
     void SetModeCore(ServerViewMode value){mode=value;toggle.Mode=value;LayoutCards();}
     public void ShowOnePreview(){SetModeCore(ServerViewMode.One);}
     public void SaveCheck(string path){var states=new List<object>();foreach(var session in sessions)states.Add(new {host=session.Config.Host,state=session.Snapshot()});File.WriteAllText(path+".json",new JavaScriptSerializer().Serialize(states));using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(path+".png");}}

@@ -1,8 +1,10 @@
-## My Windows Apps Setup v1.0.10
+## My Windows Apps Setup v1.0.11
 
 Windows 10/11용 단일 설치 파일입니다.
 
-- GPT 상세 창에 무지개 / 단일색 모드와 색상 슬라이더 추가, 선택 자동 저장
+- GPT 상세 창에 잔여량 / 단일색 모드와 색상 슬라이더 추가, 선택 자동 저장
+- 잔여량 모드의 기존 초록 → 노랑 → 빨강 색상 변화 복원
+- Lab Server Monitor 버튼 이름을 Color / Login Manager로 변경
 - GPT 원형 위젯의 숫자 주변 빈 공간을 포함해 원 내부 전체를 클릭 가능하도록 수정
 
 - Lab 색조 조절기를 버튼으로 열고 닫도록 변경 (기본은 접힌 상태)
