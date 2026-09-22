@@ -1,6 +1,8 @@
-## My Windows Apps Setup v1.0.8
+## My Windows Apps Setup v1.0.9
 
 Windows 10/11용 단일 설치 파일입니다.
+
+- Lab 색조 조절기를 버튼으로 열고 닫도록 변경 (기본은 접힌 상태)
 
 - Lab Server Monitor에 무지개 색조 슬라이더 추가: 기존 명도·채도를 유지하며 배경·카드·강조색을 함께 변경
 - 선택한 색상 자동 저장 및 기본 초록색 복원 지원

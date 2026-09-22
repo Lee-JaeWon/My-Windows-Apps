@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.1.0")]
 
 static class Ui {
     public static Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
@@ -306,6 +306,7 @@ class ServerCard : Control {
 }
 class MonitorForm : Form {
     readonly HueSlider hueSlider=new HueSlider();readonly System.Windows.Forms.Timer themeSaveTimer=new System.Windows.Forms.Timer {Interval=350};
+    readonly Panel hueEditor=new Panel();readonly Button hueButton=new Button();bool hueEditorOpen;
     readonly Label titleLabel=new Label(),subtitleLabel=new Label();
     readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer {Interval=1000};readonly List<Session> sessions=new List<Session>();readonly List<ServerCard> cards=new List<ServerCard>();
     readonly FlowLayoutPanel area=new FlowLayoutPanel();readonly string directory;readonly Sample previewData;readonly ModeToggle toggle=new ModeToggle();ServerViewMode mode=ServerViewMode.List;
@@ -317,16 +318,18 @@ class MonitorForm : Form {
         subtitleLabel.Text="GPU와 RAM 상태를 1초마다 확인합니다";subtitleLabel.Location=new Point(26,87);subtitleLabel.Size=new Size(560,25);subtitleLabel.ForeColor=Ui.Muted;subtitleLabel.AutoEllipsis=true;Controls.Add(subtitleLabel);
         var loginManager=new Button {Text="로그인 관리",Size=new Size(116,36),Location=new Point(ClientSize.Width-140,32),Anchor=AnchorStyles.Top|AnchorStyles.Right};Ui.StyleButton(loginManager,Ui.Surface2);Controls.Add(loginManager);
         toggle.Location=new Point(ClientSize.Width-328,32);toggle.Anchor=AnchorStyles.Top|AnchorStyles.Right;toggle.BackColor=Ui.Background;Controls.Add(toggle);
-        Controls.Add(new Label {Text="색조",Location=new Point(ClientSize.Width-328,86),Size=new Size(40,26),ForeColor=Ui.Muted,Anchor=AnchorStyles.Top|AnchorStyles.Right});
-        hueSlider.Location=new Point(ClientSize.Width-287,82);hueSlider.BackColor=Ui.Background;hueSlider.Anchor=AnchorStyles.Top|AnchorStyles.Right;hueSlider.Hue=Ui.Hue;Controls.Add(hueSlider);
-        var resetHue=new Button {Text="↺",Location=new Point(ClientSize.Width-56,82),Size=new Size(32,28),Anchor=AnchorStyles.Top|AnchorStyles.Right,AccessibleName="기본 초록색 복원"};Ui.StyleButton(resetHue,Ui.Surface2);resetHue.Click+=delegate{hueSlider.Hue=130;};Controls.Add(resetHue);
+        hueButton.Text="색조";hueButton.Location=new Point(ClientSize.Width-140,78);hueButton.Size=new Size(116,32);hueButton.Anchor=AnchorStyles.Top|AnchorStyles.Right;Ui.StyleButton(hueButton,Ui.Surface2);Controls.Add(hueButton);hueButton.Click+=delegate{ToggleHueEditor();};
+        hueEditor.Location=new Point(ClientSize.Width-328,122);hueEditor.Size=new Size(304,44);hueEditor.BackColor=Ui.Surface;hueEditor.Anchor=AnchorStyles.Top|AnchorStyles.Right;hueEditor.Visible=false;Controls.Add(hueEditor);
+        hueSlider.Location=new Point(10,8);hueSlider.Size=new Size(242,28);hueSlider.BackColor=Ui.Surface;hueSlider.Hue=Ui.Hue;hueEditor.Controls.Add(hueSlider);
+        var resetHue=new Button {Text="↺",Location=new Point(262,8),Size=new Size(32,28),AccessibleName="기본 초록색 복원"};Ui.StyleButton(resetHue,Ui.Surface2);resetHue.Click+=delegate{hueSlider.Hue=130;};hueEditor.Controls.Add(resetHue);
         hueSlider.HueChanged+=delegate{var before=Ui.Palette();Ui.SetHue(hueSlider.Hue);Ui.Recolor(this,before,Ui.Palette());themeSaveTimer.Stop();themeSaveTimer.Start();};themeSaveTimer.Tick+=delegate{themeSaveTimer.Stop();SaveTheme();};
         area.Location=new Point(16,126);area.Size=new Size(ClientSize.Width-32,ClientSize.Height-142);area.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;area.AutoScroll=true;area.WrapContents=true;area.FlowDirection=FlowDirection.LeftToRight;area.TabStop=true;area.BackColor=Ui.Background;Controls.Add(area);
         loginManager.Click+=delegate {using(var manager=new LoginManagerForm(directory)){manager.ShowDialog(this);if(manager.Changed)ReloadServers();}};toggle.ModeChanged+=delegate {mode=toggle.Mode;SaveMode();LayoutCards();};area.Resize+=delegate {LayoutCards();};
         LoadMode();ReloadServers();timer.Tick+=delegate {LayoutCards();foreach(var card in cards)card.Invalidate();};timer.Start();FormClosed+=delegate {if(themeSaveTimer.Enabled)SaveTheme();themeSaveTimer.Stop();themeSaveTimer.Dispose();timer.Stop();timer.Dispose();foreach(var session in sessions)session.Dispose();};
     }
     void SaveTheme(){try{Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"theme-hue.txt"),Ui.Hue.ToString());}catch{}}
-    public void PreviewHue(int hue){hueSlider.Hue=hue;SaveTheme();}
+    void ToggleHueEditor(){int shift=hueEditor.Height+Math.Max(8,hueEditor.Height/4);SuspendLayout();hueEditorOpen=!hueEditorOpen;hueEditor.Visible=hueEditorOpen;area.Top+=hueEditorOpen?shift:-shift;area.Height+=hueEditorOpen?-shift:shift;hueButton.Text=hueEditorOpen?"색조 ▴":"색조";ResumeLayout(true);if(hueEditorOpen)hueSlider.Focus();}
+    public void PreviewHue(int hue){if(!hueEditorOpen)ToggleHueEditor();int expandedTop=area.Top;ToggleHueEditor();if(hueEditorOpen||area.Top>=expandedTop)throw new Exception("Color editor collapse failed");ToggleHueEditor();if(!hueEditorOpen||area.Top!=expandedTop||(Visible&&!hueEditor.Visible))throw new Exception("Color editor expand failed");hueSlider.Hue=hue;SaveTheme();}
     string ModePath {get{return Path.Combine(directory,"view-mode.txt");}}
     protected override void OnLayout(LayoutEventArgs e){base.OnLayout(e);if(titleLabel==null||subtitleLabel==null||toggle==null||toggle.Parent==null)return;int gap=Math.Max(12,titleLabel.Left/2);int right=toggle.Left-gap;titleLabel.Width=Math.Max(1,right-titleLabel.Left);subtitleLabel.Width=Math.Max(1,right-subtitleLabel.Left);}
     void LoadMode(){try{if(File.Exists(ModePath)&&File.ReadAllText(ModePath).Trim()=="One")mode=ServerViewMode.One;}catch{}toggle.Mode=mode;}
