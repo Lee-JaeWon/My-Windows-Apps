@@ -2,7 +2,7 @@
 
 ## 설치
 
-[최신 설치 파일 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/my-windows-apps-setup-v1.0.11) → **My Windows Apps Setup.exe** 실행 → 원하는 앱 선택 → **선택한 앱 설치** 또는 **선택한 앱 삭제**를 누릅니다.
+[최신 설치 파일 다운로드](https://github.com/Lee-JaeWon/My-Windows-Apps/releases/tag/my-windows-apps-setup-v1.0.12) → **My Windows Apps Setup.exe** 실행 → 원하는 앱 선택 → **선택한 앱 설치** 또는 **선택한 앱 삭제**를 누릅니다.
 
 ## 앱
 

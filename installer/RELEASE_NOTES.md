@@ -1,6 +1,8 @@
-## My Windows Apps Setup v1.0.11
+## My Windows Apps Setup v1.0.12
 
 Windows 10/11용 단일 설치 파일입니다.
+
+- Lab Login Manager의 SSH 지문 조회 안내 문구 개선
 
 - GPT 상세 창에 잔여량 / 단일색 모드와 색상 슬라이더 추가, 선택 자동 저장
 - 잔여량 모드의 기존 초록 → 노랑 → 빨강 색상 변화 복원

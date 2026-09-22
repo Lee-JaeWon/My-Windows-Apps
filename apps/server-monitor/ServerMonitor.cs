@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyVersion("1.3.3.0")]
 
 static class Ui {
     public static Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
@@ -139,7 +139,7 @@ class LoginManagerForm : Form {
         var showPassword=new CheckBox {Text="표시",Location=new Point(626,186),Size=new Size(62,28),ForeColor=Color.White};Controls.Add(showPassword);
         AddLabel("SSH 서버 키 지문",x,225);hostKey.SetBounds(x,251,292,30);Ui.StyleTextBox(hostKey);Controls.Add(hostKey);
         var lookup=new Button {Text="지문 조회",Location=new Point(588,249),Size=new Size(100,34)};Ui.StyleButton(lookup,Ui.Surface2);Controls.Add(lookup);
-        Controls.Add(new Label {Text="예: SHA256:...  서버 관리자에게 확인한 지문을 입력하세요.",Location=new Point(x,286),Size=new Size(402,25),ForeColor=Color.FromArgb(153,167,188)});
+        Controls.Add(new Label {Text="서버 주소, 사용자 이름, 비밀번호를 입력한 후\n‘지문 조회’를 눌러주세요.\n조회되지 않으면 서버 관리자에게 문의하세요.",Location=new Point(x,286),Size=new Size(402,64),ForeColor=Ui.Muted});
         var save=new Button {Text="저장",Location=new Point(486,356),Size=new Size(96,38)};Ui.StyleButton(save,Ui.Accent);Controls.Add(save);
         var close=new Button {Text="닫기",Location=new Point(592,356),Size=new Size(96,38)};Ui.StyleButton(close,Ui.Surface2);Controls.Add(close);
         list.SelectedIndexChanged+=delegate {LoadSelected();};add.Click+=delegate {ClearFields();};remove.Click+=delegate {RemoveSelected();};
