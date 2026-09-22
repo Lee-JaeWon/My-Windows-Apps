@@ -1,6 +1,9 @@
-## My Windows Apps Setup v1.0.7
+## My Windows Apps Setup v1.0.8
 
 Windows 10/11용 단일 설치 파일입니다.
+
+- Lab Server Monitor에 무지개 색조 슬라이더 추가: 기존 명도·채도를 유지하며 배경·카드·강조색을 함께 변경
+- 선택한 색상 자동 저장 및 기본 초록색 복원 지원
 
 - Lab 창을 좁힐 때 제목과 모드 버튼이 겹치던 문제 수정
 - 좁은 창에서 서버 카드 너비를 맞추고 List 화면을 한 열로 전환
