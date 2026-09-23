@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: AssemblyTitle("GIF Generator")]
 [assembly: AssemblyProduct("GIF Generator")]
 [assembly: AssemblyDescription("MP4 to GIF and MP4 speed converter")]
-[assembly: AssemblyVersion("1.5.1.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
 
 static class GUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -174,39 +174,41 @@ class Engine {
 
 class MainForm : Form {
     Label pathLabel, status, detail; Button select, start, cancel, open, reset; GProgressBar bar;
-    string input, result; Engine engine; bool busy;
+    string result,outputDirectory; Engine engine; bool busy,cancelRequested;
+    readonly List<string> inputs=new List<string>();ListBox queue;
     Panel gifPage,speedPage;Button gifTabButton,speedTabButton;SpeedPanel speedPanel;int activeTab;
     Color bg=GUi.Background, panel=GUi.Surface2, muted=GUi.Muted;
     public MainForm() {
-        Text="GIF Generator"; ClientSize=new Size(660,520); MinimumSize=MaximumSize=Size; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; StartPosition=FormStartPosition.CenterScreen; BackColor=bg; ForeColor=GUi.Text; Font=new Font("맑은 고딕",10); AutoScaleMode=AutoScaleMode.Dpi;
+        Text="GIF Generator"; ClientSize=new Size(660,620); MinimumSize=MaximumSize=Size; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; StartPosition=FormStartPosition.CenterScreen; BackColor=bg; ForeColor=GUi.Text; Font=new Font("맑은 고딕",10); AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Label title=LabelAt("GIF Generator",28,22,440,48,26,Color.White); title.Font=new Font(Font.FontFamily,26,FontStyle.Bold);
         Label credit=LabelAt("Created by jw",480,34,150,20,9,Color.White); credit.TextAlign=ContentAlignment.MiddleRight; credit.BringToFront();
         LabelAt("GIF 만들기와 MP4 배속 변환을 한곳에서",30,76,600,28,12,muted);
         var drop=new GRoundedPanel { Location=new Point(28,122),Size=new Size(604,112),AllowDrop=true }; Controls.Add(drop);
         pathLabel=new Label { Text="MP4 파일을 여기에 끌어 놓으세요",Location=new Point(18,20),Size=new Size(440,70),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true,ForeColor=Color.White }; drop.Controls.Add(pathLabel);
-        select=ButtonAt("파일 선택",460,34,120,42,false); drop.Controls.Add(select); select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="GIF로 만들 MP4 선택"}) if(d.ShowDialog()==DialogResult.OK) SetInput(d.FileName); }; select.BringToFront();
+        select=ButtonAt("파일 선택",460,34,120,42,false); drop.Controls.Add(select); select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="GIF로 만들 MP4 선택",Multiselect=true}) if(d.ShowDialog()==DialogResult.OK) SetInputs(d.FileNames); }; select.BringToFront();
         AllowDrop=true; DragEnter+=EnterFile; DragDrop+=DropFile; drop.DragEnter+=EnterFile; drop.DragDrop+=DropFile;
         detail=LabelAt("50MB 이하 · 최대 999프레임 (Google Drive 전용)",30,246,600,25,10,muted);
         LabelAt("원본 길이 유지 · 무한 반복",30,270,600,23,9,muted);
-        status=LabelAt("파일을 선택하면 시작할 수 있습니다.",30,294,600,40,10,Color.White);
-        bar=new GProgressBar {Location=new Point(30,338),Size=new Size(600,10),Maximum=100}; Controls.Add(bar);
-        start=ButtonAt("GIF 만들기",30,374,210,48,true); start.Enabled=false; start.Click+=async delegate { await BeginConvert(); };
-        cancel=ButtonAt("취소",254,374,80,48,false); cancel.Enabled=false; cancel.Click+=delegate { if(engine!=null) {engine.Cancelled=true; status.Text="변환을 취소하고 있습니다…";} };
-        open=ButtonAt("저장 폴더 열기",348,374,160,48,false); open.Enabled=false; open.Click+=delegate { if(result!=null) Process.Start("explorer.exe","/select,\""+result+"\""); };
-        reset=ButtonAt("초기화",522,374,108,48,false); reset.Click+=delegate { ResetInput(); };
+        queue=new ListBox {Location=new Point(30,294),Size=new Size(600,82),BackColor=GUi.Surface,ForeColor=GUi.Text,BorderStyle=BorderStyle.None,IntegralHeight=false,HorizontalScrollbar=true};Controls.Add(queue);
+        status=LabelAt("파일을 선택하면 시작할 수 있습니다.",30,386,600,34,10,Color.White);
+        bar=new GProgressBar {Location=new Point(30,430),Size=new Size(600,10),Maximum=100}; Controls.Add(bar);
+        start=ButtonAt("GIF 만들기",30,466,210,48,true); start.Enabled=false; start.Click+=async delegate { await BeginConvert(); };
+        cancel=ButtonAt("취소",254,466,80,48,false); cancel.Enabled=false; cancel.Click+=delegate {cancelRequested=true;if(engine!=null)engine.Cancelled=true;status.Text="변환을 취소하고 있습니다…";};
+        open=ButtonAt("저장 폴더 열기",348,466,160,48,false); open.Enabled=false; open.Click+=delegate { if(outputDirectory!=null) Process.Start("explorer.exe",outputDirectory); };
+        reset=ButtonAt("초기화",522,466,108,48,false); reset.Click+=delegate { ResetInput(); };
         // Keep the GIF controls and their state on the first tab.
         var gifControls=new System.Collections.Generic.List<Control>();
         foreach(Control c in Controls) if(c.Top>=122) gifControls.Add(c);
         var switcher=new GRoundedPanel {Location=new Point(28,116),Size=new Size(604,42)};Controls.Add(switcher);
         gifTabButton=new Button {Text="MP4 → GIF",Location=new Point(3,3),Size=new Size(297,36)};GUi.Button(gifTabButton,GUi.Accent);switcher.Controls.Add(gifTabButton);
         speedTabButton=new Button {Text="MP4 배속 → MP4",Location=new Point(304,3),Size=new Size(297,36)};GUi.Button(speedTabButton,GUi.Surface2);switcher.Controls.Add(speedTabButton);
-        gifPage=new Panel {Location=new Point(0,164),Size=new Size(660,350),BackColor=bg};speedPage=new Panel {Location=gifPage.Location,Size=gifPage.Size,BackColor=bg,Visible=false};Controls.Add(gifPage);Controls.Add(speedPage);
+        gifPage=new Panel {Location=new Point(0,164),Size=new Size(660,450),BackColor=bg};speedPage=new Panel {Location=gifPage.Location,Size=gifPage.Size,BackColor=bg,Visible=false};Controls.Add(gifPage);Controls.Add(speedPage);
         foreach(Control c in gifControls) {c.Top-=110;gifPage.Controls.Add(c);}
         speedPanel=new SpeedPanel {Dock=DockStyle.Fill};speedPage.Controls.Add(speedPanel);
         gifTabButton.Click+=delegate{SelectTab(0);};speedTabButton.Click+=delegate{SelectTab(1);};SelectTab(0);
         FormClosing+=delegate(object s,FormClosingEventArgs e) {
-            if(busy) {e.Cancel=true; engine.Cancelled=true; status.Text="취소 중입니다. 완료 후 창을 닫아 주세요.";}
+            if(busy) {e.Cancel=true;cancelRequested=true;if(engine!=null)engine.Cancelled=true;status.Text="취소 중입니다. 완료 후 창을 닫아 주세요.";}
             if(speedPanel.Busy) {e.Cancel=true; speedPanel.Cancel();}
         };
     }
@@ -215,27 +217,59 @@ class MainForm : Form {
     Label LabelAt(string text,int x,int y,int w,int h,int size,Color color) {var l=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=color};Controls.Add(l);return l;}
     Button ButtonAt(string text,int x,int y,int w,int h,bool primary) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(w,h)};GUi.Button(b,primary?GUi.Accent:panel);Controls.Add(b);return b;}
     void EnterFile(object s,DragEventArgs e) {e.Effect=!busy&&!speedPanel.Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;}
-    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy)return; var files=(string[])e.Data.GetData(DataFormats.FileDrop);if(files!=null&&files.Length>0) {if(activeTab==1)speedPanel.SetInput(files[0]);else SetInput(files[0]);}}
+    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy)return; var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0) {if(activeTab==1)speedPanel.SetInput(files[0]);else SetInputs(files);}}
     void ResetInput() {
         if(busy)return;
-        input=result=null; engine=null;
+        inputs.Clear();queue.Items.Clear();result=outputDirectory=null;engine=null;cancelRequested=false;
         pathLabel.Text="MP4 파일을 여기에 끌어 놓으세요";
         status.Text="파일을 선택하면 시작할 수 있습니다.";
         bar.Value=0; start.Enabled=cancel.Enabled=open.Enabled=false;
         select.Enabled=true; select.Focus();
     }
-    public void SetInput(string file) {if(busy)return;if(!File.Exists(file)||!Path.GetExtension(file).Equals(".mp4",StringComparison.OrdinalIgnoreCase)){MessageBox.Show("MP4 파일을 선택해 주세요.");return;} input=file;pathLabel.Text=Path.GetFileName(file)+"\n"+(new FileInfo(file).Length/1000000.0).ToString("0.0")+" MB";start.Enabled=true;status.Text="준비 완료 · 저장 위치를 선택하고 변환하세요.";bar.Value=0;}
+    public void SetInput(string file){SetInputs(new[]{file});}
+    public void SetInputs(IEnumerable<string> files) {
+        if(busy)return;var valid=new List<string>();int ignored=0;
+        foreach(string file in files){if(File.Exists(file)&&Path.GetExtension(file).Equals(".mp4",StringComparison.OrdinalIgnoreCase)){if(!valid.Exists(x=>string.Equals(x,file,StringComparison.OrdinalIgnoreCase)))valid.Add(file);}else ignored++;}
+        if(valid.Count==0){MessageBox.Show("MP4 파일을 선택해 주세요.");return;}
+        inputs.Clear();inputs.AddRange(valid);queue.Items.Clear();foreach(string file in inputs)queue.Items.Add("대기  ·  "+Path.GetFileName(file));
+        result=outputDirectory=null;open.Enabled=false;bar.Value=0;start.Enabled=true;
+        pathLabel.Text=inputs.Count==1?Path.GetFileName(inputs[0])+"\n"+(new FileInfo(inputs[0]).Length/1000000.0).ToString("0.0")+" MB":inputs.Count+"개 MP4 파일 선택됨";
+        status.Text=ignored>0?ignored+"개 항목은 MP4가 아니어서 제외했습니다.":"준비 완료 · 저장 위치를 선택하고 변환하세요.";
+    }
     async Task BeginConvert() {
-        string dest; using(var d=new SaveFileDialog { Filter="GIF 이미지|*.gif",DefaultExt="gif",AddExtension=true,FileName=Path.GetFileNameWithoutExtension(input)+"_50MB.gif",InitialDirectory=Path.GetDirectoryName(input),OverwritePrompt=false }) {
-            if(d.ShowDialog()!=DialogResult.OK)return; dest=d.FileName;
-            if(File.Exists(dest)){MessageBox.Show("같은 이름의 파일이 있습니다. 다른 이름으로 저장해 주세요.");return;}
+        if(inputs.Count==0)return;
+        string dest=null,folder=null;
+        if(inputs.Count==1)using(var d=new SaveFileDialog {Filter="GIF 이미지|*.gif",DefaultExt="gif",AddExtension=true,FileName=Path.GetFileNameWithoutExtension(inputs[0])+"_50MB.gif",InitialDirectory=Path.GetDirectoryName(inputs[0]),OverwritePrompt=false}) {
+            if(d.ShowDialog()!=DialogResult.OK)return;dest=d.FileName;if(File.Exists(dest)){MessageBox.Show("같은 이름의 파일이 있습니다. 다른 이름으로 저장해 주세요.");return;}folder=Path.GetDirectoryName(dest);
+        } else using(var d=new FolderBrowserDialog {Description="GIF 파일을 저장할 폴더를 선택하세요",SelectedPath=Path.GetDirectoryName(inputs[0]),ShowNewFolderButton=true}) {
+            if(d.ShowDialog()!=DialogResult.OK)return;folder=d.SelectedPath;
         }
-        busy=true;start.Enabled=select.Enabled=open.Enabled=reset.Enabled=false;cancel.Enabled=true;bar.Value=0;
-        engine=new Engine(); engine.Status=delegate(string text,int pct) { if(!IsDisposed) BeginInvoke((Action)delegate {status.Text=text;bar.Value=Math.Max(0,Math.Min(100,pct));}); };
-        try { string info=await Task.Run(()=>engine.Convert(input,dest));result=dest;status.Text="완료 · "+info;bar.Value=100;open.Enabled=true; }
-        catch(OperationCanceledException){status.Text="취소되었습니다.";bar.Value=0;}
-        catch(Exception ex){status.Text="변환하지 못했습니다.";MessageBox.Show(ex.Message,"GIF Generator",MessageBoxButtons.OK,MessageBoxIcon.Error);}
-        finally{busy=false;start.Enabled=select.Enabled=reset.Enabled=true;cancel.Enabled=false;}
+        await RunConversion(folder,dest);
+    }
+    public async Task ConvertBatchTest(string[] files,string folder){SetInputs(files);await RunConversion(folder,null);}
+    async Task RunConversion(string folder,string dest){
+        busy=true;cancelRequested=false;start.Enabled=select.Enabled=open.Enabled=reset.Enabled=false;cancel.Enabled=true;bar.Value=0;outputDirectory=folder;
+        var reserved=new HashSet<string>(StringComparer.OrdinalIgnoreCase);int successes=0,failures=0;var errors=new List<string>();
+        try {
+            for(int i=0;i<inputs.Count;i++){
+                if(cancelRequested)break;
+                int index=i;string file=inputs[i],target=dest??BatchDestination(folder,file,reserved);
+                queue.Items[index]="변환 중  ·  "+Path.GetFileName(file);queue.TopIndex=index;status.Text=(index+1)+"/"+inputs.Count+"  "+Path.GetFileName(file);
+                engine=new Engine();engine.Status=delegate(string text,int pct){if(!IsDisposed)BeginInvoke((Action)delegate{status.Text=(index+1)+"/"+inputs.Count+"  "+text;bar.Value=Math.Max(0,Math.Min(100,(index*100+pct)/inputs.Count));});};
+                try{string info=await Task.Run(()=>engine.Convert(file,target));result=target;successes++;queue.Items[index]="완료  ·  "+Path.GetFileName(target);status.Text=(index+1)+"/"+inputs.Count+"  완료 · "+info;}
+                catch(OperationCanceledException){cancelRequested=true;queue.Items[index]="취소  ·  "+Path.GetFileName(file);}
+                catch(Exception ex){failures++;queue.Items[index]="실패  ·  "+Path.GetFileName(file)+"  ·  "+ex.Message;errors.Add(Path.GetFileName(file)+": "+ex.Message);}
+                engine=null;bar.Value=Math.Min(100,(index+1)*100/inputs.Count);
+            }
+            status.Text=cancelRequested?"취소됨 · 완료 "+successes+"개"+(failures>0?" · 실패 "+failures+"개":""):"완료 "+successes+"개"+(failures>0?" · 실패 "+failures+"개":"");
+            if(errors.Count>0)MessageBox.Show(this,string.Join("\n",errors.ToArray()),"변환하지 못한 파일",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+            open.Enabled=successes>0;
+        }finally{busy=false;engine=null;start.Enabled=select.Enabled=reset.Enabled=true;cancel.Enabled=false;}
+    }
+    static string BatchDestination(string folder,string file,HashSet<string> reserved){
+        string baseName=Path.GetFileNameWithoutExtension(file)+"_50MB",candidate=Path.Combine(folder,baseName+".gif");int number=2;
+        while(File.Exists(candidate)||reserved.Contains(candidate))candidate=Path.Combine(folder,baseName+" ("+(number++)+").gif");
+        reserved.Add(candidate);return candidate;
     }
 }
 class SpeedPanel : UserControl {
@@ -298,7 +332,17 @@ class Program {
             try {var e=new Engine();if(args.Length>3)e.Limit=long.Parse(args[3]);e.Status=delegate(string s,int p){Console.WriteLine(s+" "+p+"%");};var summary=e.Convert(Path.GetFullPath(args[1]),Path.GetFullPath(args[2]));File.WriteAllText(args[2]+".result.txt",summary);return 0;}catch(Exception ex){File.WriteAllText(args[2]+".error.txt",ex.ToString());return 1;}
         }
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+        if(args.Length>=4&&args[0]=="--batch-test"){
+            using(var batchForm=new MainForm()){
+                batchForm.Shown+=async delegate {try{var files=new string[args.Length-2];Array.Copy(args,2,files,0,files.Length);await batchForm.ConvertBatchTest(files,args[1]);File.WriteAllText(Path.Combine(args[1],"batch-result.txt"),"done");}catch(Exception ex){File.WriteAllText(Path.Combine(args[1],"batch-error.txt"),ex.ToString());}finally{batchForm.Close();}};
+                Application.Run(batchForm);
+            }return 0;
+        }
         var form=new MainForm();if(args.Length>0&&File.Exists(args[0]))form.SetInput(args[0]);
+        if(args.Length==2&&args[0]=="--ui-batch-test"){
+            string first=Path.Combine(Path.GetTempPath(),"GifBatchPreview-a-"+Guid.NewGuid().ToString("N")+".mp4"),second=Path.Combine(Path.GetTempPath(),"GifBatchPreview-b-"+Guid.NewGuid().ToString("N")+".mp4");
+            try{File.WriteAllBytes(first,new byte[0]);File.WriteAllBytes(second,new byte[0]);form.SetInputs(new[]{first,second});form.Show();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();}finally{File.Delete(first);File.Delete(second);}return 0;
+        }
         if(args.Length==2&&(args[0]=="--ui-test"||args[0]=="--ui-speed-test")) {form.Show();if(args[0]=="--ui-speed-test")form.SelectSpeedTab();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();return 0;}
         Application.Run(form);return 0;
     }

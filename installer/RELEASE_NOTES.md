@@ -1,6 +1,9 @@
-## My Windows Apps Setup v1.0.12
+## My Windows Apps Setup v1.0.13
 
 Windows 10/11용 단일 설치 파일입니다.
+
+- GIF Generator에서 MP4 여러 개 선택·끌어놓기와 순차 GIF 변환 지원
+- 파일별 상태·전체 진행률 표시, 중복 파일명 자동 구분, 실패한 파일 건너뛰기
 
 - Lab Login Manager의 SSH 지문 조회 안내 문구 개선
 
