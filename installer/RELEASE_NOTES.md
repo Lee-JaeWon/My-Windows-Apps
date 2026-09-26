@@ -1,6 +1,9 @@
-## My Windows Apps Setup v1.0.14
+## My Windows Apps Setup v1.0.15
 
 Windows 10/11용 단일 설치 파일입니다.
+
+- Lab 서버 카드의 ↑ / ↓ 버튼으로 순서 변경
+- List / One에서 같은 순서 사용, 다음 실행에도 유지
 
 - Lab Login Manager에서 내 컴퓨터 표시를 선택해 로컬 NVIDIA GPU와 RAM 조회
 - 로컬 카드에 PC 이름과 IPv4 주소 표시, 선택한 표시 여부 저장

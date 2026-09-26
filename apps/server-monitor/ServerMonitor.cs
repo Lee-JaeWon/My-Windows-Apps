@@ -19,7 +19,7 @@ using System.Net.NetworkInformation;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
 
 static class Ui {
     public static Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
@@ -95,6 +95,13 @@ static class ConfigStore {
     }
     public static bool ShowLocal(string directory){try{return File.ReadAllText(Path.Combine(directory,"show-local.txt")).Trim()=="1";}catch{return false;}}
     public static void SetShowLocal(string directory,bool show){Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"show-local.txt"),show?"1":"0");}
+    public static string[] LoadCardOrder(string directory){
+        try{return Json.Deserialize<string[]>(File.ReadAllText(Path.Combine(directory,"card-order.json")))??new string[0];}
+        catch{return new string[0];}
+    }
+    public static void SaveCardOrder(string directory,IEnumerable<string> keys){
+        Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"card-order.json"),Json.Serialize(new List<string>(keys).ToArray()),new UTF8Encoding(false));
+    }
     public static void MigrateExisting(string directory) {
         Directory.CreateDirectory(directory);if(File.Exists(ConfigPath(directory)))return;
         string oldDirectory=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"settings");string oldConfig=ConfigPath(oldDirectory);
@@ -242,6 +249,7 @@ class Session : IDisposable {
     public Session(ServerConfig config,Sample preview) {
         Config=config;configDirectory="";worker=null;current.Data=preview;current.Received=DateTime.UtcNow;current.Connected=true;current.State="연결됨";
     }
+    public Session(Sample preview){IsLocal=true;Config=new ServerConfig{Host="내 컴퓨터",User="preview"};configDirectory="";worker=null;current.Data=preview;current.Received=DateTime.UtcNow;current.Connected=true;current.State="실행 중";}
     static string Q(string s) {return "\""+s+"\"";}
     public ViewState Snapshot() {lock(gate)return new ViewState {Data=current.Data,Received=current.Received,State=current.State,Connected=current.Connected,Updates=current.Updates};}
     void SetState(string state,bool connected) {lock(gate){current.State=state;current.Connected=connected;if(!connected)current.Data=null;}}
@@ -338,12 +346,20 @@ class Session : IDisposable {
 }
 class ServerCard : Control {
     readonly Session session;ServerViewMode mode;
+    public event Action<ServerCard,int> MoveRequested;
+    public Session Session {get{return session;}}
+    public string OrderKey {get{return session.IsLocal?"local":"remote:"+(session.Config.PasswordFile??session.Config.User+"@"+session.Config.Host);}}
+    public bool CanMoveUp,CanMoveDown;
     readonly Font hostFont=new Font("Segoe UI",16,FontStyle.Bold), labelFont=new Font("Segoe UI",9), valueFont=new Font("Segoe UI",14,FontStyle.Bold), ringFont=new Font("Segoe UI",15,FontStyle.Bold), smallFont=new Font("맑은 고딕",9);
     public ServerCard(Session source,ServerViewMode viewMode) {session=source;mode=viewMode;DoubleBuffered=true;BackColor=Ui.Background;}
     public ServerViewMode Mode {get{return mode;}set{mode=value;Invalidate();}}
     public int DesiredHeight {get {var state=session.Snapshot();int count=state.Data!=null&&state.Data.gpus!=null?state.Data.gpus.Length:0;if(mode==ServerViewMode.One)return Math.Max(400,140+Math.Max(1,(count+3)/4)*170+78);return Math.Max(464,121+count*108+120);}}
     void TextAt(Graphics g,string text,Font font,Color color,int x,int y,int width,int height,TextFormatFlags extra) {TextRenderer.DrawText(g,text,font,new Rectangle(x,y,width,height),color,TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding|extra);}
     void TextAt(Graphics g,string text,Font font,Color color,int x,int y,int width,int height){TextAt(g,text,font,color,x,y,width,height,TextFormatFlags.Left);}
+    Rectangle ArrowBounds(int direction){return new Rectangle(Width+(direction<0?-88:-51),17,31,29);}
+    protected override void OnMouseMove(MouseEventArgs e){base.OnMouseMove(e);Cursor=ArrowBounds(-1).Contains(e.Location)||ArrowBounds(1).Contains(e.Location)?Cursors.Hand:Cursors.Default;}
+    protected override void OnMouseUp(MouseEventArgs e){base.OnMouseUp(e);if(e.Button!=MouseButtons.Left||MoveRequested==null)return;if(CanMoveUp&&ArrowBounds(-1).Contains(e.Location))MoveRequested(this,-1);else if(CanMoveDown&&ArrowBounds(1).Contains(e.Location))MoveRequested(this,1);}
+    void DrawArrow(Graphics g,int direction,bool enabled){var r=ArrowBounds(direction);using(var p=Ui.Round(r,8))using(var b=new SolidBrush(enabled?Ui.Surface2:Ui.Surface))g.FillPath(b,p);TextAt(g,direction<0?"↑":"↓",labelFont,enabled?Ui.Text:Ui.Track,r.X,r.Y,r.Width,r.Height,TextFormatFlags.HorizontalCenter);}
     void Bar(Graphics g,int x,int y,int width,double used,double total,Color color) {using(var pen=new Pen(Ui.Track,7)){pen.StartCap=pen.EndCap=LineCap.Round;g.DrawLine(pen,x,y,x+width,y);}if(total>0)using(var pen=new Pen(color,7)){pen.StartCap=pen.EndCap=LineCap.Round;g.DrawLine(pen,x,y,x+(int)(width*Math.Max(0,Math.Min(1,used/total))),y);}}
     void Ring(Graphics g,Gpu gpu,Rectangle cell) {
         int diameter=Math.Min(94,cell.Width-34),x=cell.X+(cell.Width-diameter)/2,y=cell.Y+24;var ring=new Rectangle(x+7,y+7,diameter-14,diameter-14);
@@ -359,7 +375,7 @@ class ServerCard : Control {
     protected override void OnPaint(PaintEventArgs e) {
         base.OnPaint(e);var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;using(var p=Ui.Round(new Rectangle(0,0,Width-1,Height-1),18))using(var b=new SolidBrush(Ui.Surface))g.FillPath(b,p);
         var state=session.Snapshot();double age=(DateTime.UtcNow-state.Received).TotalSeconds;bool live=state.Connected&&age<4;var signal=live?Ui.Accent:Color.FromArgb(232,177,92);var data=live?state.Data:null;
-        TextAt(g,session.Config.Host,hostFont,Ui.Text,24,18,Width-48,31);TextAt(g,session.Config.User,labelFont,Ui.Muted,24,49,Width-48,21);
+        TextAt(g,session.Config.Host,hostFont,Ui.Text,24,18,Width-120,31);TextAt(g,session.Config.User,labelFont,Ui.Muted,24,49,Width-48,21);DrawArrow(g,-1,CanMoveUp);DrawArrow(g,1,CanMoveDown);
         using(var brush=new SolidBrush(signal))g.FillEllipse(brush,25,84,8,8);TextAt(g,state.Connected&&!live?"응답 지연":state.State,smallFont,signal,42,75,Width-66,25);
         if(mode==ServerViewMode.One)PaintOne(g,data,live);else PaintList(g,data,live);
     }
@@ -405,9 +421,24 @@ class MonitorForm : Form {
     protected override void OnLayout(LayoutEventArgs e){base.OnLayout(e);if(titleLabel==null||subtitleLabel==null||toggle==null||toggle.Parent==null)return;int gap=Math.Max(12,titleLabel.Left/2);int right=toggle.Left-gap;titleLabel.Width=Math.Max(1,right-titleLabel.Left);subtitleLabel.Width=Math.Max(1,right-subtitleLabel.Left);}
     void LoadMode(){try{if(File.Exists(ModePath)&&File.ReadAllText(ModePath).Trim()=="One")mode=ServerViewMode.One;}catch{}toggle.Mode=mode;}
     void SaveMode(){try{Directory.CreateDirectory(directory);File.WriteAllText(ModePath,mode.ToString());}catch{}}
-    void LayoutCards(){if(cards.Count==0)return;int available=Math.Max(1,area.ClientSize.Width-SystemInformation.VerticalScrollBarWidth-8);int columns=mode==ServerViewMode.List&&available>=772?2:1;int width=Math.Max(1,available/columns-16);foreach(var card in cards){card.Mode=mode;card.Width=width;int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Margin=new Padding(8,0,8,14);}}
-    void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();if(previewData==null&&ConfigStore.ShowLocal(directory))AddCard(new Session(true));var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;AddCard(previewData==null?new Session(server,directory):new Session(server,previewData));}if(cards.Count==0)area.Controls.Add(new Label {Text="표시할 서버가 없습니다. ‘Login Manager’에서 서버를 추가하거나 내 컴퓨터 표시를 선택하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});LayoutCards();}
-    void AddCard(Session session){sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}
+    void LayoutCards(){if(cards.Count==0)return;int available=Math.Max(1,area.ClientSize.Width-SystemInformation.VerticalScrollBarWidth-8);int columns=mode==ServerViewMode.List&&available>=772?2:1;int width=Math.Max(1,available/columns-16);for(int i=0;i<cards.Count;i++){var card=cards[i];card.Mode=mode;card.Width=width;card.CanMoveUp=i>0;card.CanMoveDown=i<cards.Count-1;int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Margin=new Padding(8,0,8,14);card.Invalidate();}}
+    void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();if(ConfigStore.ShowLocal(directory))AddCard(previewData==null?new Session(true):new Session(previewData));var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;AddCard(previewData==null?new Session(server,directory):new Session(server,previewData));}if(cards.Count==0)area.Controls.Add(new Label {Text="표시할 서버가 없습니다. ‘Login Manager’에서 서버를 추가하거나 내 컴퓨터 표시를 선택하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});ApplySavedOrder();LayoutCards();}
+    void AddCard(Session session){sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};card.MoveRequested+=MoveCard;cards.Add(card);area.Controls.Add(card);}
+    void ApplySavedOrder(){
+        var keys=ConfigStore.LoadCardOrder(directory);var positions=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);var original=new Dictionary<ServerCard,int>();for(int i=0;i<cards.Count;i++)original[cards[i]]=i;
+        for(int i=0;i<keys.Length;i++)if(!positions.ContainsKey(keys[i]))positions.Add(keys[i],i);
+        cards.Sort(delegate(ServerCard a,ServerCard b){int ia,ib;bool hasA=positions.TryGetValue(a.OrderKey,out ia),hasB=positions.TryGetValue(b.OrderKey,out ib);if(hasA&&hasB)return ia.CompareTo(ib);if(hasA)return -1;if(hasB)return 1;return original[a].CompareTo(original[b]);});
+        for(int i=0;i<cards.Count;i++)area.Controls.SetChildIndex(cards[i],i);
+        sessions.Clear();foreach(var card in cards)sessions.Add(card.Session);
+    }
+    void MoveCard(ServerCard card,int direction){
+        int index=cards.IndexOf(card),destination=index+direction;if(index<0||destination<0||destination>=cards.Count)return;
+        cards.RemoveAt(index);cards.Insert(destination,card);sessions.Clear();foreach(var current in cards)sessions.Add(current.Session);
+        area.Controls.SetChildIndex(card,destination);area.PerformLayout();LayoutCards();
+        var order=new List<string>();foreach(var current in cards)order.Add(current.OrderKey);ConfigStore.SaveCardOrder(directory,order);
+    }
+    public void MoveCardForTest(int index,int direction){MoveCard(cards[index],direction);}
+    public string[] CardOrderForTest(){var keys=new List<string>();foreach(var card in cards)keys.Add(card.OrderKey);return keys.ToArray();}
     void SetModeCore(ServerViewMode value){mode=value;toggle.Mode=value;LayoutCards();}
     public void ShowOnePreview(){SetModeCore(ServerViewMode.One);}
     public void SaveCheck(string path){var states=new List<object>();foreach(var session in sessions)states.Add(new {host=session.Config.Host,state=session.Snapshot()});File.WriteAllText(path+".json",new JavaScriptSerializer().Serialize(states));using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(path+".png");}}
@@ -434,6 +465,16 @@ class Program {
             try{ConfigStore.SetShowLocal(localDirectory,true);using(var form=new MonitorForm(localDirectory)){var finish=new System.Windows.Forms.Timer {Interval=3500};finish.Tick+=delegate{finish.Stop();finish.Dispose();form.SaveCheck(args[1]);form.Close();};finish.Start();Application.Run(form);}}
             catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}
             finally{try{Directory.Delete(localDirectory,true);}catch{}}return 0;
+        }
+        if(args.Length==2&&args[0]=="--order-ui-test"){
+            string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-Order-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
+            try{
+                ConfigStore.Save(previewDirectory,new[]{new ServerConfig{Host="server-a",User="researcher",PasswordFile="a.txt"},new ServerConfig{Host="server-b",User="researcher",PasswordFile="b.txt"},new ServerConfig{Host="server-c",User="researcher",PasswordFile="c.txt"}});ConfigStore.SetShowLocal(previewDirectory,true);
+                var sample=new Sample{gpus=new[]{new Gpu{index="0",name="NVIDIA GPU",used=8192,total=49152,utilization=32,temperature=48}},ram_total=131072,ram_used=32768};
+                using(var form=new MonitorForm(previewDirectory,sample)){form.Show();Application.DoEvents();form.MoveCardForTest(0,1);form.MoveCardForTest(1,1);form.ShowOnePreview();Application.DoEvents();string[] order=form.CardOrderForTest();if(order.Length!=4||order[0]!="remote:a.txt"||order[1]!="remote:b.txt"||order[2]!="local")throw new Exception("Card move failed");using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}form.Close();}
+                using(var reopened=new MonitorForm(previewDirectory,sample)){string[] order=reopened.CardOrderForTest();if(order[0]!="remote:a.txt"||order[1]!="remote:b.txt"||order[2]!="local")throw new Exception("Saved card order failed");reopened.Show();reopened.Close();}
+                File.WriteAllText(args[1]+".result.txt","list-to-one ordering and reload passed");
+            }catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}finally{try{Directory.Delete(previewDirectory,true);}catch{}}return 0;
         }
         if(args.Length==2&&(args[0]=="--one-ui-test"||args[0]=="--narrow-ui-test"||args[0]=="--theme-ui-test")) {
             string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-One-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
