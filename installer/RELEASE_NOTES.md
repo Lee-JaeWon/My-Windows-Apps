@@ -1,6 +1,9 @@
-## My Windows Apps Setup v1.0.13
+## My Windows Apps Setup v1.0.14
 
 Windows 10/11용 단일 설치 파일입니다.
+
+- Lab Login Manager에서 내 컴퓨터 표시를 선택해 로컬 NVIDIA GPU와 RAM 조회
+- 로컬 카드에 PC 이름과 IPv4 주소 표시, 선택한 표시 여부 저장
 
 - GIF Generator에서 MP4 여러 개 선택·끌어놓기와 순차 GIF 변환 지원
 - 파일별 상태·전체 진행률 표시, 중복 파일명 자동 구분, 실패한 파일 건너뛰기

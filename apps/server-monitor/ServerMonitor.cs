@@ -11,10 +11,15 @@ using System.Collections.Generic;
 using System.Web.Script.Serialization;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Net;
+using System.Net.Sockets;
+using System.Net.NetworkInformation;
 
 [assembly: AssemblyTitle("Lab Server Monitor")]
 [assembly: AssemblyProduct("Lab Server Monitor")]
-[assembly: AssemblyVersion("1.3.3.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
 
 static class Ui {
     public static Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39);
@@ -88,6 +93,8 @@ static class ConfigStore {
         var config=new Config {Servers=new List<ServerConfig>(servers).ToArray()};
         File.WriteAllText(ConfigPath(directory),Json.Serialize(config),new UTF8Encoding(false));
     }
+    public static bool ShowLocal(string directory){try{return File.ReadAllText(Path.Combine(directory,"show-local.txt")).Trim()=="1";}catch{return false;}}
+    public static void SetShowLocal(string directory,bool show){Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"show-local.txt"),show?"1":"0");}
     public static void MigrateExisting(string directory) {
         Directory.CreateDirectory(directory);if(File.Exists(ConfigPath(directory)))return;
         string oldDirectory=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"settings");string oldConfig=ConfigPath(oldDirectory);
@@ -133,6 +140,8 @@ class LoginManagerForm : Form {
         Controls.Add(new Label {Text="저장된 로그인",Location=new Point(20,18),Size=new Size(220,26),Font=new Font("맑은 고딕",12,FontStyle.Bold)});
         list.Location=new Point(20,52);list.Size=new Size(235,292);list.BackColor=Ui.Surface;list.ForeColor=Ui.Text;list.BorderStyle=BorderStyle.None;list.ItemHeight=30;Controls.Add(list);
         var add=new Button {Text="새 로그인",Location=new Point(20,356),Size=new Size(112,38)};var remove=new Button {Text="삭제",Location=new Point(143,356),Size=new Size(112,38)};Ui.StyleButton(add,Ui.Surface2);Ui.StyleButton(remove,Color.FromArgb(102,55,59));Controls.Add(add);Controls.Add(remove);
+        var showLocal=new CheckBox {Text="내 컴퓨터 표시",Location=new Point(20,401),Size=new Size(235,25),Checked=ConfigStore.ShowLocal(directory),ForeColor=Ui.Text};Controls.Add(showLocal);
+        showLocal.CheckedChanged+=delegate {ConfigStore.SetShowLocal(directory,showLocal.Checked);Changed=true;};
         int x=286;AddLabel("서버 주소",x,24);host.SetBounds(x,50,402,30);Ui.StyleTextBox(host);Controls.Add(host);
         AddLabel("사용자 이름",x,91);user.SetBounds(x,117,402,30);Ui.StyleTextBox(user);Controls.Add(user);
         AddLabel("비밀번호",x,158);password.SetBounds(x,184,330,30);password.UseSystemPasswordChar=true;Ui.StyleTextBox(password);Controls.Add(password);
@@ -203,6 +212,7 @@ public class ViewState {
 }
 class Session : IDisposable {
     public readonly ServerConfig Config;
+    public readonly bool IsLocal;
     readonly object gate=new object();
     readonly ManualResetEvent stop=new ManualResetEvent(false);
     readonly string configDirectory;
@@ -212,12 +222,73 @@ class Session : IDisposable {
         Config=config;configDirectory=directory;
         worker=new Thread(Work) {IsBackground=true,Name="Monitor "+config.Host};worker.Start();
     }
+    public Session(bool local) {
+        IsLocal=local;Config=new ServerConfig {Host="내 컴퓨터",User=Environment.MachineName+" · IPv4 "+LocalIp()};configDirectory="";
+        worker=new Thread(LocalWork) {IsBackground=true,Name="Monitor local PC"};worker.Start();
+    }
+    static string LocalIp(){
+        string fallback=null;
+        try{
+            foreach(var adapter in NetworkInterface.GetAllNetworkInterfaces()){
+                if(adapter.OperationalStatus!=OperationalStatus.Up||adapter.NetworkInterfaceType==NetworkInterfaceType.Loopback)continue;
+                foreach(var entry in adapter.GetIPProperties().UnicastAddresses){
+                    IPAddress address=entry.Address;if(address.AddressFamily!=AddressFamily.InterNetwork||IPAddress.IsLoopback(address)||address.ToString().StartsWith("169.254."))continue;
+                    if(adapter.NetworkInterfaceType==NetworkInterfaceType.Ethernet||adapter.NetworkInterfaceType==NetworkInterfaceType.Wireless80211)return address.ToString();
+                    if(fallback==null)fallback=address.ToString();
+                }
+            }
+        }catch{}return fallback??"없음";
+    }
     public Session(ServerConfig config,Sample preview) {
         Config=config;configDirectory="";worker=null;current.Data=preview;current.Received=DateTime.UtcNow;current.Connected=true;current.State="연결됨";
     }
     static string Q(string s) {return "\""+s+"\"";}
     public ViewState Snapshot() {lock(gate)return new ViewState {Data=current.Data,Received=current.Received,State=current.State,Connected=current.Connected,Updates=current.Updates};}
     void SetState(string state,bool connected) {lock(gate){current.State=state;current.Connected=connected;if(!connected)current.Data=null;}}
+    [StructLayout(LayoutKind.Sequential)]
+    struct MemoryStatus {public uint length,load;public ulong total,available,totalPage,availablePage,totalVirtual,availableVirtual,availableExtended;}
+    [DllImport("kernel32.dll",SetLastError=true)]static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
+    static double? LocalNumber(string value){double number;return double.TryParse(value.Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out number)?number:(double?)null;}
+    static string NvidiaSmiPath(){
+        var candidates=new List<string> {Path.Combine(Environment.SystemDirectory,"nvidia-smi.exe"),Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"NVIDIA Corporation","NVSMI","nvidia-smi.exe")};
+        foreach(string folder in (Environment.GetEnvironmentVariable("PATH")??"").Split(';'))try{if(folder.Trim().Length>0)candidates.Add(Path.Combine(folder.Trim(),"nvidia-smi.exe"));}catch{}
+        foreach(string path in candidates)if(File.Exists(path))return path;return null;
+    }
+    Sample ReadLocal(string smi) {
+        var data=new Sample {gpus=new Gpu[0],gpu_error="",ram_error=""};
+        var memory=new MemoryStatus {length=(uint)Marshal.SizeOf(typeof(MemoryStatus))};
+        if(GlobalMemoryStatusEx(ref memory)&&memory.total>0){data.ram_total=memory.total/1048576.0;data.ram_used=(memory.total-memory.available)/1048576.0;}
+        else data.ram_error="RAM 조회 실패";
+        if(smi==null){data.gpu_error="nvidia-smi 없음";return data;}
+        try {
+            using(var process=new Process()) {
+                process.StartInfo=new ProcessStartInfo(smi,"--query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8};
+                lock(gate){if(stop.WaitOne(0))return data;process.Start();active=process;}
+                try {
+                    Task<string> output=process.StandardOutput.ReadToEndAsync();
+                    if(!process.WaitForExit(2000)){try{process.Kill();}catch{}data.gpu_error="GPU 조회 시간 초과";return data;}
+                    if(process.ExitCode!=0){data.gpu_error="GPU 조회 실패";return data;}
+                    var gpus=new List<Gpu>();
+                    foreach(string line in output.Result.Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries)){
+                        string[] parts=line.Split(',');if(parts.Length<6)continue;
+                        gpus.Add(new Gpu {index=parts[0].Trim(),name=parts[1].Trim(),used=LocalNumber(parts[2]),total=LocalNumber(parts[3]),utilization=LocalNumber(parts[4]),temperature=LocalNumber(parts[5])});
+                    }
+                    data.gpus=gpus.ToArray();
+                    if(gpus.Count==0)data.gpu_error="NVIDIA GPU 없음";
+                } finally {lock(gate)if(active==process)active=null;}
+            }
+        } catch {data.gpu_error="GPU 조회 실패";lock(gate)active=null;}
+        return data;
+    }
+    void LocalWork(){
+        string smi=NvidiaSmiPath();DateTime next=DateTime.UtcNow;
+        while(!stop.WaitOne(0)){
+            try {var data=ReadLocal(smi);lock(gate){current.Data=data;current.Received=DateTime.UtcNow;current.Connected=true;current.State="실행 중";current.Updates++;}}
+            catch {SetState("로컬 조회 실패",false);}
+            next=next.AddSeconds(1);DateTime now=DateTime.UtcNow;if(next<now)next=now;
+            if(stop.WaitOne((int)Math.Max(0,(next-now).TotalMilliseconds)))break;
+        }
+    }
     void Work() {
         while(!stop.WaitOne(0)) {
             string error="";
@@ -294,14 +365,14 @@ class ServerCard : Control {
     }
     void PaintList(Graphics g,Sample data,bool live) {
         int y=118;if(data!=null&&data.gpus!=null&&data.gpus.Length>0)foreach(var gpu in data.gpus){TextAt(g,"GPU "+gpu.index+"  ·  "+gpu.name,labelFont,Ui.Muted,24,y,Width-48,24);string memory=gpu.used.HasValue&&gpu.total.HasValue?gpu.used.Value.ToString("0")+" MiB / "+gpu.total.Value.ToString("0")+" MiB":"메모리 정보 없음";TextAt(g,memory,valueFont,Ui.Text,24,y+27,Width-48,32);Bar(g,25,y+69,Width-50,gpu.used??0,gpu.total??0,Ui.Accent);TextAt(g,"Usage  "+(gpu.utilization.HasValue?gpu.utilization.Value.ToString("0")+"%":"—")+"   ·   "+(gpu.temperature.HasValue?gpu.temperature.Value.ToString("0")+"°C":"—"),smallFont,Ui.Accent,24,y+77,Width-48,22);y+=108;}
-        else {TextAt(g,"GPU",labelFont,Ui.Muted,24,y,Width-48,24);TextAt(g,data==null?"—":"GPU 없음",valueFont,Ui.Muted,24,y+27,Width-48,32);y+=94;}
+        else {TextAt(g,"GPU",labelFont,Ui.Muted,24,y,Width-48,24);TextAt(g,data==null?"—":string.IsNullOrEmpty(data.gpu_error)?"GPU 없음":data.gpu_error,valueFont,Ui.Muted,24,y+27,Width-48,32);y+=94;}
         PaintRam(g,data,y);PaintFooter(g,live);
     }
     void PaintOne(Graphics g,Sample data,bool live) {
-        int y=112;if(data!=null&&data.gpus!=null&&data.gpus.Length>0){int cols=Math.Min(4,data.gpus.Length),cellWidth=(Width-48)/cols;for(int i=0;i<data.gpus.Length;i++){int row=i/4,col=i%4;Ring(g,data.gpus[i],new Rectangle(24+col*cellWidth,y+row*170,cellWidth,168));}y+=((data.gpus.Length+3)/4)*170+8;}else{TextAt(g,data==null?"GPU 데이터를 기다리는 중입니다.":"GPU 없음",valueFont,Ui.Muted,24,y,Width-48,72,TextFormatFlags.HorizontalCenter);y+=94;}PaintRam(g,data,y);PaintFooter(g,live);
+        int y=112;if(data!=null&&data.gpus!=null&&data.gpus.Length>0){int cols=Math.Min(4,data.gpus.Length),cellWidth=(Width-48)/cols;for(int i=0;i<data.gpus.Length;i++){int row=i/4,col=i%4;Ring(g,data.gpus[i],new Rectangle(24+col*cellWidth,y+row*170,cellWidth,168));}y+=((data.gpus.Length+3)/4)*170+8;}else{TextAt(g,data==null?"GPU 데이터를 기다리는 중입니다.":string.IsNullOrEmpty(data.gpu_error)?"GPU 없음":data.gpu_error,valueFont,Ui.Muted,24,y,Width-48,72,TextFormatFlags.HorizontalCenter);y+=94;}PaintRam(g,data,y);PaintFooter(g,live);
     }
     void PaintRam(Graphics g,Sample data,int y){bool ram=data!=null&&data.ram_total>0&&string.IsNullOrEmpty(data.ram_error);string text=ram?"RAM   "+(data.ram_used/1024).ToString("0.0")+" / "+(data.ram_total/1024).ToString("0.0")+" GiB":"RAM   —";TextAt(g,text,smallFont,Ui.Muted,24,y,Width-48,25);Bar(g,25,y+32,Width-50,ram?data.ram_used:0,ram?data.ram_total:0,Ui.Accent);}
-    void PaintFooter(Graphics g,bool live){var state=session.Snapshot();TextAt(g,live?"마지막 갱신  "+state.Received.ToLocalTime().ToString("HH:mm:ss"):"상태는 SSH 연결 기준입니다.",smallFont,Ui.Muted,24,Height-37,Width-48,24);}
+    void PaintFooter(Graphics g,bool live){var state=session.Snapshot();TextAt(g,live?"마지막 갱신  "+state.Received.ToLocalTime().ToString("HH:mm:ss"):session.IsLocal?"로컬 정보를 확인하고 있습니다.":"상태는 SSH 연결 기준입니다.",smallFont,Ui.Muted,24,Height-37,Width-48,24);}
     protected override void Dispose(bool disposing){if(disposing){hostFont.Dispose();labelFont.Dispose();valueFont.Dispose();ringFont.Dispose();smallFont.Dispose();}base.Dispose(disposing);}
 }
 class MonitorForm : Form {
@@ -335,7 +406,8 @@ class MonitorForm : Form {
     void LoadMode(){try{if(File.Exists(ModePath)&&File.ReadAllText(ModePath).Trim()=="One")mode=ServerViewMode.One;}catch{}toggle.Mode=mode;}
     void SaveMode(){try{Directory.CreateDirectory(directory);File.WriteAllText(ModePath,mode.ToString());}catch{}}
     void LayoutCards(){if(cards.Count==0)return;int available=Math.Max(1,area.ClientSize.Width-SystemInformation.VerticalScrollBarWidth-8);int columns=mode==ServerViewMode.List&&available>=772?2:1;int width=Math.Max(1,available/columns-16);foreach(var card in cards){card.Mode=mode;card.Width=width;int desired=card.DesiredHeight;if(card.Height!=desired)card.Height=desired;card.Margin=new Padding(8,0,8,14);}}
-    void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;var session=previewData==null?new Session(server,directory):new Session(server,previewData);sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}if(config.Servers.Length==0)area.Controls.Add(new Label {Text="저장된 로그인이 없습니다. ‘Login Manager’를 눌러 서버를 추가하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});LayoutCards();}
+    void ReloadServers(){foreach(var session in sessions)session.Dispose();sessions.Clear();cards.Clear();area.Controls.Clear();if(previewData==null&&ConfigStore.ShowLocal(directory))AddCard(new Session(true));var config=ConfigStore.Load(directory);foreach(var server in config.Servers){if(server==null)continue;AddCard(previewData==null?new Session(server,directory):new Session(server,previewData));}if(cards.Count==0)area.Controls.Add(new Label {Text="표시할 서버가 없습니다. ‘Login Manager’에서 서버를 추가하거나 내 컴퓨터 표시를 선택하세요.",AutoSize=false,Size=new Size(700,80),Margin=new Padding(18),Font=new Font("맑은 고딕",13),ForeColor=Ui.Muted});LayoutCards();}
+    void AddCard(Session session){sessions.Add(session);var card=new ServerCard(session,mode){Size=new Size(458,464)};card.MouseEnter+=delegate{area.Focus();};cards.Add(card);area.Controls.Add(card);}
     void SetModeCore(ServerViewMode value){mode=value;toggle.Mode=value;LayoutCards();}
     public void ShowOnePreview(){SetModeCore(ServerViewMode.One);}
     public void SaveCheck(string path){var states=new List<object>();foreach(var session in sessions)states.Add(new {host=session.Config.Host,state=session.Snapshot()});File.WriteAllText(path+".json",new JavaScriptSerializer().Serialize(states));using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(path+".png");}}
@@ -356,6 +428,12 @@ class Program {
             string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
             try {using(var form=new LoginManagerForm(previewDirectory)){form.Show();Application.DoEvents();using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(args[1]);}}}
             catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}return 0;
+        }
+        if(args.Length==2&&args[0]=="--local-check"){
+            string localDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-Local-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(localDirectory);
+            try{ConfigStore.SetShowLocal(localDirectory,true);using(var form=new MonitorForm(localDirectory)){var finish=new System.Windows.Forms.Timer {Interval=3500};finish.Tick+=delegate{finish.Stop();finish.Dispose();form.SaveCheck(args[1]);form.Close();};finish.Start();Application.Run(form);}}
+            catch(Exception ex){File.WriteAllText(args[1]+".error.txt",ex.ToString());return 1;}
+            finally{try{Directory.Delete(localDirectory,true);}catch{}}return 0;
         }
         if(args.Length==2&&(args[0]=="--one-ui-test"||args[0]=="--narrow-ui-test"||args[0]=="--theme-ui-test")) {
             string previewDirectory=Path.Combine(Path.GetTempPath(),"LabServerMonitor-One-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
