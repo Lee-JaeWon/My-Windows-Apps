@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: AssemblyTitle("GIF Generator")]
 [assembly: AssemblyProduct("GIF Generator")]
 [assembly: AssemblyDescription("MP4 to GIF and MP4 speed converter")]
-[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.6.1.0")]
 
 static class GUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -110,6 +110,7 @@ class Engine {
     public string Convert(string input, string output) {
         if(!File.Exists(input)) throw new Exception("MP4 파일을 찾을 수 없습니다.");
         if(File.Exists(output)) throw new Exception("같은 이름의 결과 파일이 이미 있습니다. 다른 이름을 선택하세요.");
+        long outputLimit=Math.Min(Limit,new FileInfo(input).Length);
         Status("영상 정보를 확인하고 있습니다…",0);
         string json=Run("ffprobe", "-v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate,duration:format=duration -of json " + Q(input),null);
         var root=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(json);
@@ -151,18 +152,18 @@ class Engine {
                     frameFpsCap=fps*(MaxFrames-1)/frames*0.995;
                     continue;
                 }
-                if(size<=Limit) {
+                if(size<=outputLimit) {
                     File.Copy(candidate,best,true); low=q; bestSettings=edge+"px · "+fps.ToString("0.###")+"fps · "+frames+"프레임 · "+(size/1000000.0).ToString("0.00")+" MB";
                     if(q>=0.999 || ++refinement>=4 || high-low<0.015) break;
                     q=(low+high)/2;
                 } else {
                     high=q;
                     if(low>0) { if(++refinement>=4) break; q=(low+high)/2; }
-                    else q=Math.Max(0.0001,q*Math.Min(0.85,Math.Pow((double)Limit/size*0.94,0.42)));
+                    else q=Math.Max(0.0001,q*Math.Min(0.85,Math.Pow((double)outputLimit/size*0.94,0.42)));
                 }
             }
-            Check(); if(!File.Exists(best)) throw new Exception("50MB 이하·999프레임 이하로 변환하지 못했습니다. 더 짧은 영상을 사용해 주세요.");
-            if(new FileInfo(best).Length>Limit) throw new Exception("파일 크기 검증에 실패했습니다.");
+            Check(); if(!File.Exists(best)) throw new Exception("원본 MP4와 50MB 중 더 작은 용량·999프레임 이하로 변환하지 못했습니다. 더 짧은 영상을 사용해 주세요.");
+            if(new FileInfo(best).Length>outputLimit) throw new Exception("파일 크기 검증에 실패했습니다.");
             if(CountFrames(best)>MaxFrames) throw new Exception("프레임 수 검증에 실패했습니다.");
             // Copy to a unique sibling, then rename so an interrupted copy is never a finished GIF.
             string staging=output+"."+Guid.NewGuid().ToString("N")+".tmp";
@@ -188,7 +189,7 @@ class MainForm : Form {
         pathLabel=new Label { Text="MP4 파일을 여기에 끌어 놓으세요",Location=new Point(18,20),Size=new Size(440,70),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true,ForeColor=Color.White }; drop.Controls.Add(pathLabel);
         select=ButtonAt("파일 선택",460,34,120,42,false); drop.Controls.Add(select); select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="GIF로 만들 MP4 선택",Multiselect=true}) if(d.ShowDialog()==DialogResult.OK) SetInputs(d.FileNames); }; select.BringToFront();
         AllowDrop=true; DragEnter+=EnterFile; DragDrop+=DropFile; drop.DragEnter+=EnterFile; drop.DragDrop+=DropFile;
-        detail=LabelAt("50MB 이하 · 최대 999프레임 (Google Drive 전용)",30,246,600,25,10,muted);
+        detail=LabelAt("원본 MP4 크기와 50MB 중 작은 용량 이하 · 최대 999프레임 (Google Drive 전용)",30,246,600,25,10,muted);
         LabelAt("원본 길이 유지 · 무한 반복",30,270,600,23,9,muted);
         queue=new ListBox {Location=new Point(30,294),Size=new Size(600,82),BackColor=GUi.Surface,ForeColor=GUi.Text,BorderStyle=BorderStyle.None,IntegralHeight=false,HorizontalScrollbar=true};Controls.Add(queue);
         status=LabelAt("파일을 선택하면 시작할 수 있습니다.",30,386,600,34,10,Color.White);

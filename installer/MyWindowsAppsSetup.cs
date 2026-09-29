@@ -13,7 +13,7 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("My Windows Apps Setup")]
 [assembly: AssemblyProduct("My Windows Apps")]
 [assembly: AssemblyDescription("Installer for GIF Generator, Lab Server Monitor and GPT Usage Tray")]
-[assembly: AssemblyVersion("1.0.15.0")]
+[assembly: AssemblyVersion("1.0.16.0")]
 
 static class SetupUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -39,7 +39,7 @@ class SetupForm : Form {
         FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;BackColor=background;ForeColor=SetupUi.Text;Font=new Font("맑은 고딕",10);Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Controls.Add(new Label {Text="My Windows Apps",Location=new Point(30,24),Size=new Size(540,42),Font=new Font("Segoe UI",24,FontStyle.Bold)});
         Controls.Add(new Label {Text="설치하거나 삭제할 앱을 선택하세요",Location=new Point(32,69),Size=new Size(540,26),ForeColor=muted});
-        AddOption(gif,30,112,"GIF Generator","MP4를 50MB·999프레임 이하 GIF로 변환하고 MP4 배속을 조절합니다.");
+        AddOption(gif,30,112,"GIF Generator","MP4를 원본 크기와 50MB 중 작은 용량 이하 GIF로 변환합니다.");
         AddOption(monitor,30,210,"Lab Server Monitor","서버 GPU 메모리·사용률·온도와 RAM을 1초마다 확인합니다.");
         AddOption(usage,30,308,"GPT Usage Tray","Codex Pro 주간 잔여 사용량을 작업표시줄 왼쪽에 표시합니다.");
         gif.Checked=monitor.Checked=usage.Checked=true;
