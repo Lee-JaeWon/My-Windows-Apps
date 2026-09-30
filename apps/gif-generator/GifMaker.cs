@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: AssemblyTitle("GIF Generator")]
 [assembly: AssemblyProduct("GIF Generator")]
 [assembly: AssemblyDescription("MP4 to GIF and MP4 speed converter")]
-[assembly: AssemblyVersion("1.6.1.0")]
+[assembly: AssemblyVersion("1.6.2.0")]
 
 static class GUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -183,7 +183,6 @@ class MainForm : Form {
         Text="GIF Generator"; ClientSize=new Size(660,620); MinimumSize=MaximumSize=Size; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; StartPosition=FormStartPosition.CenterScreen; BackColor=bg; ForeColor=GUi.Text; Font=new Font("맑은 고딕",10); AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Label title=LabelAt("GIF Generator",28,22,440,48,26,Color.White); title.Font=new Font(Font.FontFamily,26,FontStyle.Bold);
-        Label credit=LabelAt("Created by jw",480,34,150,20,9,Color.White); credit.TextAlign=ContentAlignment.MiddleRight; credit.BringToFront();
         LabelAt("GIF 만들기와 MP4 배속 변환을 한곳에서",30,76,600,28,12,muted);
         var drop=new GRoundedPanel { Location=new Point(28,122),Size=new Size(604,112),AllowDrop=true }; Controls.Add(drop);
         pathLabel=new Label { Text="MP4 파일을 여기에 끌어 놓으세요",Location=new Point(18,20),Size=new Size(440,70),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true,ForeColor=Color.White }; drop.Controls.Add(pathLabel);
@@ -341,8 +340,9 @@ class Program {
         }
         var form=new MainForm();if(args.Length>0&&File.Exists(args[0]))form.SetInput(args[0]);
         if(args.Length==2&&args[0]=="--ui-batch-test"){
-            string first=Path.Combine(Path.GetTempPath(),"GifBatchPreview-a-"+Guid.NewGuid().ToString("N")+".mp4"),second=Path.Combine(Path.GetTempPath(),"GifBatchPreview-b-"+Guid.NewGuid().ToString("N")+".mp4");
-            try{File.WriteAllBytes(first,new byte[0]);File.WriteAllBytes(second,new byte[0]);form.SetInputs(new[]{first,second});form.Show();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();}finally{File.Delete(first);File.Delete(second);}return 0;
+            string previewDirectory=Path.Combine(Path.GetTempPath(),"GifBatchPreview-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
+            string first=Path.Combine(previewDirectory,"sample-01.mp4"),second=Path.Combine(previewDirectory,"sample-02.mp4");
+            try{File.WriteAllBytes(first,new byte[0]);File.WriteAllBytes(second,new byte[0]);form.SetInputs(new[]{first,second});form.Show();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();}finally{Directory.Delete(previewDirectory,true);}return 0;
         }
         if(args.Length==2&&(args[0]=="--ui-test"||args[0]=="--ui-speed-test")) {form.Show();if(args[0]=="--ui-speed-test")form.SelectSpeedTab();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();return 0;}
         Application.Run(form);return 0;
