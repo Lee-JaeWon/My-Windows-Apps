@@ -4,7 +4,7 @@
 
 ## 설치: 1 → 2 → 3
 
-1. **다운로드** — [최신 설치 파일 받기](https://github.com/sangh0Kim/My-Windows-Apps/releases/latest/download/My.Windows.Apps.Setup.exe)
+1. **다운로드** — [최신 설치 파일 받기](../../releases/latest/download/My.Windows.Apps.Setup.exe)
 2. **실행** — 받은 `My.Windows.Apps.Setup.exe`를 더블클릭합니다.
 3. **선택** — 원하는 앱을 체크하고 **선택한 앱 설치**를 누릅니다. 바탕화면에 바로가기가 만들어집니다.
 

@@ -1,0 +1,12 @@
+{
+  "tag": "my-windows-apps-setup-v1.0.18",
+  "title": "My Windows Apps Setup v1.0.18",
+  "source_url": "https://github.com/sangh0Kim/My-Windows-Apps/releases/download/my-windows-apps-setup-v1.0.18/My.Windows.Apps.Setup.exe",
+  "sha256": "5c94d1aaedd5536d3f190458640680de16aa41f8d89b982073a7fef9c3a255e7",
+  "source_blobs": {
+    "apps/gpt-usage-tray/GPTUsageTray.cs": "bf551884aa8db412ab8193d7926486a18c760347",
+    "installer/MyWindowsAppsSetup.cs": "5435193fac52b630df33676d4ec71a8d1619c1ea",
+    "apps/gif-generator/GifMaker.cs": "0dc00d47df3de77cf254fd8ec1fa435c42248c97",
+    "apps/server-monitor/ServerMonitor.cs": "9e94d90c0b6239be6ef4dc9f17cbbc6694d1b01c"
+  }
+}
