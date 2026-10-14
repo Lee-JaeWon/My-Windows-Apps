@@ -1,0 +1,70 @@
+name: Publish verified installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-installer.yml'
+      - '.github/scripts/publish-installer.ps1'
+      - '.github/releases/**'
+  pull_request:
+    paths:
+      - '.github/workflows/publish-installer.yml'
+      - '.github/scripts/publish-installer.ps1'
+      - '.github/releases/**'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish on upstream main (otherwise validate only)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verified-installer-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Verify installer hash and source
+        shell: pwsh
+        run: ./.github/scripts/publish-installer.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-installer
+          path: release/My.Windows.Apps.Setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: verify
+    if: >-
+      github.repository == 'Lee-JaeWon/My-Windows-Apps' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-installer
+          path: release
+      - name: Publish the approved installer
+        shell: pwsh
+        run: ./.github/scripts/publish-installer.ps1 -Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
