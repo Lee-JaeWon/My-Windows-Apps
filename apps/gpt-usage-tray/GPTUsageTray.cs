@@ -148,13 +148,15 @@ static class CodexUsageReader {
 }
 
 static class WidgetColors {
-    public static bool Single;public static int Hue=130;
+    public static string Mode="remaining";public static int Hue=130,EndHue=0;
+    public static readonly Color StartColor=Color.FromArgb(76,222,128),EndColor=Color.FromArgb(239,68,68);
     static readonly string Settings=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GPTUsageTray","widget-color.txt");
-    static WidgetColors(){try{string[] values=File.ReadAllLines(Settings);int hue;if(values.Length==2&&int.TryParse(values[1],out hue)&&hue>=0&&hue<=359){Single=values[0]=="single";Hue=hue;}}catch{}}
-    public static void Save(){try{Directory.CreateDirectory(Path.GetDirectoryName(Settings));File.WriteAllLines(Settings,new[]{Single?"single":"remaining",Hue.ToString()});}catch{}}
+    static WidgetColors(){try{string[] values=File.ReadAllLines(Settings);int hue,end;if(values.Length>=2&&int.TryParse(values[1],out hue)&&hue>=0&&hue<=359){Mode=values[0]=="single"?"single":values[0]=="custom"?"custom":"remaining";Hue=hue;EndHue=values.Length>=3&&int.TryParse(values[2],out end)&&end>=0&&end<=359?end:0;if(Mode=="single")EndHue=Hue;}}catch{}}
+    public static void Save(){try{Directory.CreateDirectory(Path.GetDirectoryName(Settings));File.WriteAllLines(Settings,new[]{Mode,Hue.ToString(),EndHue.ToString()});}catch{}}
     public static Color FromHue(double hue){hue=((hue%360)+360)%360;double c=0.64,x=c*(1-Math.Abs(hue/60%2-1)),m=0.22,r=0,g=0,b=0;if(hue<60){r=c;g=x;}else if(hue<120){r=x;g=c;}else if(hue<180){g=c;b=x;}else if(hue<240){g=x;b=c;}else if(hue<300){r=x;b=c;}else{r=c;b=x;}return Color.FromArgb((int)((r+m)*255),(int)((g+m)*255),(int)((b+m)*255));}
 }
 class WidgetHueSlider : Control {
+    public Color? PreviewColor;
     int hue;public event EventHandler ValueChanged;
     public int Hue{get{return hue;}set{value=Math.Max(0,Math.Min(359,value));if(value==hue)return;hue=value;Invalidate();if(ValueChanged!=null)ValueChanged(this,EventArgs.Empty);}}
     public WidgetHueSlider(){DoubleBuffered=true;TabStop=true;Cursor=Cursors.Hand;AccessibleName="위젯 단일 색상";AccessibleRole=AccessibleRole.Slider;BackColor=DetailsUi.Surface;}
@@ -163,8 +165,9 @@ class WidgetHueSlider : Control {
     protected override void OnMouseMove(MouseEventArgs e){base.OnMouseMove(e);if(Capture&&e.Button==MouseButtons.Left)Pick(e.X);}
     protected override void OnMouseUp(MouseEventArgs e){base.OnMouseUp(e);if(e.Button==MouseButtons.Left)Capture=false;}
     protected override bool IsInputKey(Keys key){return key==Keys.Left||key==Keys.Right||base.IsInputKey(key);}
+    protected override void OnEnabledChanged(EventArgs e){base.OnEnabledChanged(e);Invalidate();}
     protected override void OnKeyDown(KeyEventArgs e){base.OnKeyDown(e);if(e.KeyCode==Keys.Left){Hue--;e.Handled=true;}if(e.KeyCode==Keys.Right){Hue++;e.Handled=true;}}
-    protected override void OnPaint(PaintEventArgs e){var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;int y=Height/2;var r=new Rectangle(10,y-4,Math.Max(1,Width-20),8);using(var p=DetailsUi.Round(r,4))using(var b=new LinearGradientBrush(r,Color.Red,Color.Red,0f)){var colors=new Color[7];var positions=new float[7];for(int i=0;i<7;i++){colors[i]=WidgetColors.FromHue(i*60);positions[i]=i/6f;}b.InterpolationColors=new ColorBlend{Colors=colors,Positions=positions};g.FillPath(b,p);}float x=10+(Width-20)*hue/359f;using(var b=new SolidBrush(WidgetColors.FromHue(hue)))g.FillEllipse(b,x-7,y-7,14,14);using(var p=new Pen(Color.White,2))g.DrawEllipse(p,x-7,y-7,14,14);if(Focused)ControlPaint.DrawFocusRectangle(g,ClientRectangle);}
+    protected override void OnPaint(PaintEventArgs e){var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;int y=Height/2;var r=new Rectangle(10,y-4,Math.Max(1,Width-20),8);using(var p=DetailsUi.Round(r,4))using(var b=new LinearGradientBrush(r,Color.Red,Color.Red,0f)){var colors=new Color[7];var positions=new float[7];for(int i=0;i<7;i++){colors[i]=WidgetColors.FromHue(i*60);positions[i]=i/6f;}b.InterpolationColors=new ColorBlend{Colors=colors,Positions=positions};g.FillPath(b,p);}float x=10+(Width-20)*hue/359f;using(var b=new SolidBrush(PreviewColor??WidgetColors.FromHue(hue)))g.FillEllipse(b,x-7,y-7,14,14);using(var p=new Pen(Color.White,2))g.DrawEllipse(p,x-7,y-7,14,14);if(!Enabled)using(var b=new SolidBrush(Color.FromArgb(140,BackColor)))g.FillRectangle(b,ClientRectangle);if(Focused&&Enabled)ControlPaint.DrawFocusRectangle(g,ClientRectangle);}
 }
 
 static class DetailsUi {
@@ -184,49 +187,74 @@ class DetailsBar : Control {
 class DetailsForm : Form {
     readonly System.Windows.Forms.Timer colorSaveTimer=new System.Windows.Forms.Timer {Interval=350};
     public event EventHandler ColorsChanged;
-    Label main,updated,tokens;Panel windows;Button refresh;
+    Label main,updated;Panel windows;Button refresh;
     readonly Color bg=DetailsUi.Background,surface=DetailsUi.Surface,muted=DetailsUi.Muted;
     public event EventHandler RefreshRequested;
     public DetailsForm() {
-        Text="GPT 사용량";ClientSize=new Size(480,550);MinimumSize=MaximumSize=Size;FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;BackColor=bg;ForeColor=DetailsUi.Text;Font=new Font("맑은 고딕",10);ShowInTaskbar=true;
-        Controls.Add(new Label {Text="GPT Usage",Location=new Point(26,22),Size=new Size(420,34),Font=new Font("Segoe UI",20,FontStyle.Bold),ForeColor=DetailsUi.Text});
+        Text="GPT 사용량";ClientSize=new Size(480,523);MinimumSize=MaximumSize=Size;FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;BackColor=bg;ForeColor=DetailsUi.Text;Font=new Font("맑은 고딕",10);ShowInTaskbar=true;
+        Controls.Add(new Label {Text="GPT Usage",Location=new Point(26,18),Size=new Size(420,44),Font=new Font("Segoe UI",20,FontStyle.Bold),ForeColor=DetailsUi.Text});
         main=new Label {Location=new Point(27,62),Size=new Size(425,42),Font=new Font("맑은 고딕",22,FontStyle.Bold),Text="사용량 확인 중…",ForeColor=DetailsUi.Text};Controls.Add(main);
         updated=new Label {Location=new Point(29,108),Size=new Size(420,24),ForeColor=muted};Controls.Add(updated);
-        windows=new DetailsCard {Location=new Point(24,145),Size=new Size(432,158)};Controls.Add(windows);
-        tokens=new Label {Location=new Point(27,317),Size=new Size(425,28),ForeColor=muted};Controls.Add(tokens);
-        var colors=new DetailsCard {Location=new Point(24,354),Size=new Size(432,128)};Controls.Add(colors);
-        var remainingMode=new RadioButton {Text="잔여량 모드",Location=new Point(18,12),Size=new Size(170,28),Checked=!WidgetColors.Single};var single=new RadioButton {Text="단일색 선택",Location=new Point(224,12),Size=new Size(184,28),Checked=WidgetColors.Single};colors.Controls.Add(remainingMode);colors.Controls.Add(single);
-        var hue=new WidgetHueSlider {Location=new Point(16,47),Size=new Size(398,30),Hue=WidgetColors.Hue};colors.Controls.Add(hue);
-        var colorHint=new Label {Location=new Point(18,88),Size=new Size(396,25),ForeColor=muted};colors.Controls.Add(colorHint);
-        Action updateColors=delegate{WidgetColors.Single=single.Checked;WidgetColors.Hue=hue.Hue;colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량이 줄면 초록 → 노랑 → 빨강으로 바뀝니다";windows.Invalidate(true);colorSaveTimer.Stop();colorSaveTimer.Start();if(ColorsChanged!=null)ColorsChanged(this,EventArgs.Empty);};
-        remainingMode.CheckedChanged+=delegate{if(remainingMode.Checked)updateColors();};single.CheckedChanged+=delegate{if(single.Checked)updateColors();};hue.ValueChanged+=delegate{single.Checked=true;updateColors();};colorHint.Text=single.Checked?"선택한 색상을 유지합니다 · 변경 사항 자동 저장":"잔여량이 줄면 초록 → 노랑 → 빨강으로 바뀝니다";
+        windows=new DetailsCard {Location=new Point(24,145),Size=new Size(432,138)};Controls.Add(windows);
+        var colors=new DetailsCard {Location=new Point(24,297),Size=new Size(432,158)};Controls.Add(colors);
+        var remainingMode=new RadioButton {Text="잔여량 모드",Location=new Point(18,12),Size=new Size(120,28),Checked=WidgetColors.Mode=="remaining"};
+        var single=new RadioButton {Text="단일색 선택",Location=new Point(140,12),Size=new Size(120,28),Checked=WidgetColors.Mode=="single"};
+        var custom=new RadioButton {Text="커스텀 색상 선택",Location=new Point(262,12),Size=new Size(160,28),Checked=WidgetColors.Mode=="custom"};
+        colors.Controls.AddRange(new Control[]{remainingMode,single,custom});
+        colors.Controls.Add(new Label {Text="100% 색상",Location=new Point(18,47),Size=new Size(82,30),TextAlign=ContentAlignment.MiddleLeft,ForeColor=muted});
+        colors.Controls.Add(new Label {Text="0% 색상",Location=new Point(18,77),Size=new Size(82,30),TextAlign=ContentAlignment.MiddleLeft,ForeColor=muted});
+        var hue=new WidgetHueSlider {Location=new Point(100,47),Size=new Size(314,30),Hue=WidgetColors.Hue,AccessibleName="시작점 색상 (잔여량 100%)"};
+        var endHue=new WidgetHueSlider {Location=new Point(100,77),Size=new Size(314,30),Hue=WidgetColors.EndHue,AccessibleName="끝점 색상 (잔여량 0%)"};colors.Controls.Add(hue);colors.Controls.Add(endHue);
+        var colorHint=new Label {Location=new Point(18,118),Size=new Size(396,25),ForeColor=muted};colors.Controls.Add(colorHint);
+        bool syncing=false;
+        Action syncColors=delegate{
+            syncing=true;
+            hue.PreviewColor=remainingMode.Checked?(Color?)WidgetColors.StartColor:null;endHue.PreviewColor=remainingMode.Checked?(Color?)WidgetColors.EndColor:null;
+            hue.Hue=remainingMode.Checked?(int)Math.Round(WidgetColors.StartColor.GetHue()):WidgetColors.Hue;
+            endHue.Hue=remainingMode.Checked?(int)Math.Round(WidgetColors.EndColor.GetHue()):WidgetColors.EndHue;
+            hue.Enabled=endHue.Enabled=!remainingMode.Checked;hue.Invalidate();endHue.Invalidate();
+            colorHint.Text=remainingMode.Checked?"잔여량이 줄면 초록 → 노랑 → 빨강으로 바뀝니다":single.Checked?"두 슬라이더가 함께 움직입니다 · 자동 저장":"잔여량에 따라 두 색을 가장 짧은 경로로 연결합니다";
+            syncing=false;
+        };
+        Action updateColors=delegate{syncColors();windows.Invalidate(true);colorSaveTimer.Stop();colorSaveTimer.Start();if(ColorsChanged!=null)ColorsChanged(this,EventArgs.Empty);};
+        remainingMode.CheckedChanged+=delegate{if(remainingMode.Checked){WidgetColors.Mode="remaining";updateColors();}};
+        single.CheckedChanged+=delegate{if(single.Checked){WidgetColors.Mode="single";WidgetColors.EndHue=WidgetColors.Hue;updateColors();}};
+        custom.CheckedChanged+=delegate{if(custom.Checked){WidgetColors.Mode="custom";updateColors();}};
+        hue.ValueChanged+=delegate{if(syncing)return;WidgetColors.Hue=hue.Hue;if(single.Checked)WidgetColors.EndHue=hue.Hue;updateColors();};
+        endHue.ValueChanged+=delegate{if(syncing)return;WidgetColors.EndHue=endHue.Hue;if(single.Checked)WidgetColors.Hue=endHue.Hue;updateColors();};syncColors();
         colorSaveTimer.Tick+=delegate{colorSaveTimer.Stop();WidgetColors.Save();};
-        refresh=new Button {Text="지금 새로고침",Location=new Point(306,496),Size=new Size(150,40)};DetailsUi.Button(refresh);Controls.Add(refresh);
+        refresh=new Button {Text="지금 새로고침",Location=new Point(306,469),Size=new Size(150,40)};DetailsUi.Button(refresh);Controls.Add(refresh);
         refresh.Click+=delegate {if(RefreshRequested!=null)RefreshRequested(this,EventArgs.Empty);};
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();}};
     }
     public void Loading(){refresh.Enabled=false;updated.Text="Codex에서 최신 사용량을 읽고 있습니다…";}
-    public void ShowError(string error){main.Text="사용량을 읽지 못했습니다";updated.Text=error;refresh.Enabled=true;windows.Controls.Clear();}
+    void AddUnavailableFiveHourRow(){
+        windows.Controls.Add(new Label {Text="5시간 한도 · 정보 없음",Location=new Point(18,14),Size=new Size(395,24),ForeColor=muted,BackColor=surface});
+        windows.Controls.Add(new DetailsBar {Location=new Point(18,45),Size=new Size(393,10),Remaining=0,Enabled=false});
+    }
+    public void ShowError(string error){main.Text="사용량을 읽지 못했습니다";updated.Text=error;refresh.Enabled=true;windows.Controls.Clear();AddUnavailableFiveHourRow();}
     public void UpdateData(UsageSnapshot snapshot) {
         refresh.Enabled=true;double? remaining=snapshot.Remaining;
         main.Text=remaining.HasValue?"주간 남은 사용량  "+remaining.Value.ToString("0")+"%":"사용량 정보 없음";
         updated.Text="마지막 갱신  "+snapshot.Updated.ToString("yyyy-MM-dd HH:mm:ss");
         windows.Controls.Clear();int y=14;
+        bool hasFiveHour=snapshot.Windows.Exists(delegate(UsageWindow item){return item.DurationMinutes==300;});
+        if(!hasFiveHour){AddUnavailableFiveHourRow();y+=64;}
         foreach(var item in snapshot.Windows) {
-            var label=new Label {Text=item.Name+"  "+item.Remaining.ToString("0")+"% 남음",Location=new Point(18,y),Size=new Size(205,24),ForeColor=DetailsUi.Text,BackColor=surface,Font=new Font("맑은 고딕",10,FontStyle.Bold)};windows.Controls.Add(label);
+            var label=new Label {Text=(item.DurationMinutes==300?"5시간":item.Name)+"  "+item.Remaining.ToString("0")+"% 남음",Location=new Point(18,y),Size=new Size(205,24),ForeColor=DetailsUi.Text,BackColor=surface,Font=new Font("맑은 고딕",10,FontStyle.Bold)};windows.Controls.Add(label);
             string reset=item.ResetLocal.HasValue?"초기화 "+item.ResetLocal.Value.ToString("MM/dd HH:mm"):"";
             var resetLabel=new Label {Text=reset,Location=new Point(225,y),Size=new Size(186,24),TextAlign=ContentAlignment.MiddleRight,ForeColor=muted,BackColor=surface};windows.Controls.Add(resetLabel);
             windows.Controls.Add(new DetailsBar {Location=new Point(18,y+31),Size=new Size(393,10),Remaining=item.Remaining});y+=64;
         }
-        if(snapshot.Windows.Count==0)windows.Controls.Add(new Label {Text="현재 계정에서 한도 정보를 제공하지 않습니다.",Location=new Point(18,20),Size=new Size(395,30),ForeColor=muted,BackColor=surface});
-        tokens.Text="오늘 토큰  "+FormatTokens(snapshot.TodayTokens)+"     누적 토큰  "+FormatTokens(snapshot.LifetimeTokens);
+        if(snapshot.Windows.Count==0)windows.Controls.Add(new Label {Text="현재 계정에서 한도 정보를 제공하지 않습니다.",Location=new Point(18,y),Size=new Size(395,30),ForeColor=muted,BackColor=surface});
     }
-    static string FormatTokens(long? value){if(!value.HasValue)return "—";if(value.Value>=1000000000)return (value.Value/1000000000.0).ToString("0.00")+"B";if(value.Value>=1000000)return (value.Value/1000000.0).ToString("0.0")+"M";if(value.Value>=1000)return (value.Value/1000.0).ToString("0.0")+"K";return value.Value.ToString();}
     protected override void Dispose(bool disposing){if(disposing){if(colorSaveTimer.Enabled)WidgetColors.Save();colorSaveTimer.Dispose();}base.Dispose(disposing);}
 }
 
 class UsageWidgetForm : Form {
     double? remaining;
+    bool hasRendered;double? renderedRemaining;
+    Color renderedColor,renderedTextColor;Size renderedSize;
     readonly ContextMenuStrip menu=new ContextMenuStrip();
     readonly System.Windows.Forms.Timer anchorTimer=new System.Windows.Forms.Timer();
     IntPtr taskbarHandle=IntPtr.Zero;
@@ -249,6 +277,7 @@ class UsageWidgetForm : Form {
     }
 
     protected override bool ShowWithoutActivation {get{return true;}}
+    protected override void OnHandleDestroyed(EventArgs e){hasRendered=false;base.OnHandleDestroyed(e);}
     protected override CreateParams CreateParams {get{var value=base.CreateParams;value.ExStyle|=0x80|0x80000;return value;}}
 
     public void UpdateData(UsageSnapshot snapshot) {
@@ -278,21 +307,32 @@ class UsageWidgetForm : Form {
     }
 
     public Bitmap CreateGaugeBitmap() {
+        double value=remaining.HasValue?Math.Max(0,Math.Min(100,remaining.Value)):0;
+        return CreateGaugeBitmap(remaining.HasValue?UsageContext.ColorFor(value):Color.FromArgb(125,135,150),ReadTaskbarTextColor());
+    }
+
+    Bitmap CreateGaugeBitmap(Color color,Color textColor) {
         var bitmap=new Bitmap(Width,Height,PixelFormat.Format32bppPArgb);using(Graphics g=Graphics.FromImage(bitmap)) {
         g.Clear(Color.Transparent);g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
         // Layered windows pass clicks through alpha-zero pixels. An imperceptible
         // interior fill makes the whole circle clickable, including around digits.
         using(var hitArea=new SolidBrush(Color.FromArgb(1,0,0,0)))g.FillEllipse(hitArea,1,1,Width-2,Height-2);
         double value=remaining.HasValue?Math.Max(0,Math.Min(100,remaining.Value)):0;
-        Color color=remaining.HasValue?UsageContext.ColorFor(value):Color.FromArgb(125,135,150);
         RectangleF ring=new RectangleF(4,4,36,36);
         using(var track=new Pen(Color.FromArgb(125,135,150),5)){track.StartCap=LineCap.Round;track.EndCap=LineCap.Round;g.DrawArc(track,ring,-90,359.8f);}
         if(remaining.HasValue&&value>0)using(var progress=new Pen(color,5)){progress.StartCap=LineCap.Round;progress.EndCap=LineCap.Round;g.DrawArc(progress,ring,-90,(float)(Math.Min(99.9,value)/100*359.8));}
         string percent=remaining.HasValue?Math.Round(value).ToString("0")+"%":"?";
-        float percentSize=percent.Length>=4?11:14;
+        float percentSize=percent.Length>=4?10:13;
         using(var font=new Font("Segoe UI",percentSize,FontStyle.Bold,GraphicsUnit.Pixel))
-        using(var textBrush=new SolidBrush(ReadTaskbarTextColor()))
-        using(var format=new StringFormat{Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center})g.DrawString(percent,font,textBrush,ring,format);
+        using(var textBrush=new SolidBrush(textColor))
+        using(var path=new GraphicsPath())
+        using(var transform=new Matrix()) {
+            // Center the visible glyph outlines, excluding font side bearings and line spacing.
+            path.AddString(percent,font.FontFamily,(int)font.Style,font.Size,PointF.Empty,StringFormat.GenericTypographic);
+            RectangleF bounds=path.GetBounds();
+            transform.Translate(ring.X+ring.Width/2-(bounds.X+bounds.Width/2),ring.Y+ring.Height/2-(bounds.Y+bounds.Height/2));
+            path.Transform(transform);g.FillPath(textBrush,path);
+        }
         }return bitmap;
     }
 
@@ -303,13 +343,18 @@ class UsageWidgetForm : Form {
 
     void RenderLayered() {
         if(!IsHandleCreated||IsDisposed)return;
-        using(var bitmap=CreateGaugeBitmap()) {
+        Color color=remaining.HasValue?UsageContext.ColorFor(remaining.Value):Color.FromArgb(125,135,150),textColor=ReadTaskbarTextColor();
+        // Keep only the last successful render's inputs, not a cached bitmap.
+        if(hasRendered&&remaining==renderedRemaining&&color==renderedColor&&textColor==renderedTextColor&&Size==renderedSize)return;
+        using(var bitmap=CreateGaugeBitmap(color,textColor)) {
             IntPtr screenDc=GetDC(IntPtr.Zero),memoryDc=CreateCompatibleDC(screenDc),hBitmap=bitmap.GetHbitmap(Color.FromArgb(0)),oldBitmap=IntPtr.Zero;
             try {
                 oldBitmap=SelectObject(memoryDc,hBitmap);
                 var destination=new POINT {X=Left,Y=Top};var size=new SIZE {Width=Width,Height=Height};var source=new POINT();
                 var blend=new BLENDFUNCTION {BlendOp=0,BlendFlags=0,SourceConstantAlpha=255,AlphaFormat=1};
-                UpdateLayeredWindow(Handle,screenDc,ref destination,ref size,memoryDc,ref source,0,ref blend,2);
+                if(UpdateLayeredWindow(Handle,screenDc,ref destination,ref size,memoryDc,ref source,0,ref blend,2)) {
+                    hasRendered=true;renderedRemaining=remaining;renderedColor=color;renderedTextColor=textColor;renderedSize=Size;
+                }
             } finally {
                 if(oldBitmap!=IntPtr.Zero)SelectObject(memoryDc,oldBitmap);DeleteObject(hBitmap);DeleteDC(memoryDc);ReleaseDC(IntPtr.Zero,screenDc);
             }
@@ -351,9 +396,16 @@ class UsageContext : ApplicationContext {
     }
     public static Color ColorFor(double remaining){
         remaining=Math.Max(0,Math.Min(100,remaining));
-        if(WidgetColors.Single)return WidgetColors.FromHue(WidgetColors.Hue);
-        if(remaining<50)return Blend(Color.FromArgb(239,68,68),Color.FromArgb(250,190,55),remaining/50.0);
-        return Blend(Color.FromArgb(250,190,55),Color.FromArgb(76,222,128),(remaining-50)/50.0);
+        if(WidgetColors.Mode=="single")return WidgetColors.FromHue(WidgetColors.Hue);
+        if(WidgetColors.Mode=="custom") {
+            // Take the shortest arc across the hue wheel, including its red seam.
+            // At exactly 180 degrees, keep the signed difference for a stable tie.
+            double delta=WidgetColors.EndHue-WidgetColors.Hue;
+            if(delta>180)delta-=360;else if(delta< -180)delta+=360;
+            return WidgetColors.FromHue(WidgetColors.Hue+delta*(1-remaining/100.0));
+        }
+        if(remaining<50)return Blend(WidgetColors.EndColor,Color.FromArgb(250,190,55),remaining/50.0);
+        return Blend(Color.FromArgb(250,190,55),WidgetColors.StartColor,(remaining-50)/50.0);
     }
     static Color Blend(Color from,Color to,double amount){return Color.FromArgb((int)(from.R+(to.R-from.R)*amount),(int)(from.G+(to.G-from.G)*amount),(int)(from.B+(to.B-from.B)*amount));}
     void Refresh() {
