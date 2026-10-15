@@ -16,7 +16,9 @@
 
 ![GIF Generator 예시: MP4 파일 두 개를 선택한 화면](docs/screenshots/gif-generator.png)
 
-MP4 여러 개를 GIF로 변환하거나 MP4 재생 속도를 바꿉니다. GIF는 **원본 MP4 크기와 50MB 중 작은 용량 이하**, **999프레임 이하**로 만듭니다.
+MP4 여러 개를 GIF로 변환하거나 MP4 재생 속도를 바꾸고, **WebM을 MP4로 변환**합니다. GIF는 **원본 MP4 크기와 50MB 중 작은 용량 이하**, **999프레임 이하**로 만듭니다.
+
+![GIF Generator의 WebM → MP4 탭 예시](docs/screenshots/webm-to-mp4.png)
 
 ## 2. Lab Server Monitor
 

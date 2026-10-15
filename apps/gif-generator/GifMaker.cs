@@ -14,8 +14,8 @@ using System.Reflection;
 
 [assembly: AssemblyTitle("GIF Generator")]
 [assembly: AssemblyProduct("GIF Generator")]
-[assembly: AssemblyDescription("MP4 to GIF and MP4 speed converter")]
-[assembly: AssemblyVersion("1.6.2.0")]
+[assembly: AssemblyDescription("MP4 to GIF, MP4 speed and WebM to MP4 converter")]
+[assembly: AssemblyVersion("1.7.0.0")]
 
 static class GUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -107,6 +107,39 @@ class Engine {
             Status("완료 · "+summary,100); return summary;
         } finally { if(File.Exists(staging)) File.Delete(staging); }
     }
+    public string ConvertWebm(string input, string output) {
+        if(!File.Exists(input) || !Path.GetExtension(input).Equals(".webm",StringComparison.OrdinalIgnoreCase)) throw new Exception("WebM 파일을 선택해 주세요.");
+        if(File.Exists(output)) throw new Exception("같은 이름의 파일이 있습니다. 다른 이름으로 저장해 주세요.");
+        Status("영상과 소리 정보를 확인하고 있습니다…",0);
+        string json=Run("ffprobe","-v error -show_entries stream=codec_type:format=duration -of json "+Q(input),null);
+        var root=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(json);
+        var streams=(System.Collections.ArrayList)root["streams"];
+        bool hasVideo=false,hasAudio=false;
+        foreach(Dictionary<string,object> stream in streams) {
+            string type=stream["codec_type"].ToString();
+            if(type=="video")hasVideo=true;
+            if(type=="audio")hasAudio=true;
+        }
+        if(!hasVideo) throw new Exception("영상이 없는 WebM 파일입니다.");
+        double duration=0;var format=(Dictionary<string,object>)root["format"];
+        if(format.ContainsKey("duration"))double.TryParse(format["duration"].ToString(),NumberStyles.Float,CultureInfo.InvariantCulture,out duration);
+        string staging=output+"."+Guid.NewGuid().ToString("N")+".tmp";
+        try {
+            string args="-hide_banner -loglevel error -y -threads 2 -i "+Q(input)+" -map 0:v:0 -map 0:a:0? -vf "+Q("pad=ceil(iw/2)*2:ceil(ih/2)*2")+" -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -threads 2 -c:a aac -b:a 192k -sn -dn -map_metadata -1 -map_chapters -1 -movflags +faststart -progress pipe:1 -nostats -f mp4 "+Q(staging);
+            Run("ffmpeg",args,delegate(string line) {
+                double us;
+                if(duration>0 && line.StartsWith("out_time_us=") && double.TryParse(line.Substring(12),NumberStyles.Float,CultureInfo.InvariantCulture,out us))
+                    Status("WebM → MP4 변환 중…",Math.Max(0,Math.Min(99,(int)(us/1000000/duration*100))));
+            });
+            Check();
+            string videoCodec=Run("ffprobe","-v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "+Q(staging),null).Trim();
+            string audioCodec=Run("ffprobe","-v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "+Q(staging),null).Trim();
+            if(videoCodec!="h264" || (hasAudio&&audioCodec!="aac") || new FileInfo(staging).Length==0) throw new Exception("결과 MP4 검증에 실패했습니다.");
+            Check();File.Move(staging,output);
+            string summary="H.264 MP4 · "+(hasAudio?"AAC 소리 · ":"소리 없음 · ")+(new FileInfo(output).Length/1000000.0).ToString("0.00")+" MB";
+            Status("완료 · "+summary,100);return summary;
+        } finally {if(File.Exists(staging))File.Delete(staging);}
+    }
     public string Convert(string input, string output) {
         if(!File.Exists(input)) throw new Exception("MP4 파일을 찾을 수 없습니다.");
         if(File.Exists(output)) throw new Exception("같은 이름의 결과 파일이 이미 있습니다. 다른 이름을 선택하세요.");
@@ -177,13 +210,13 @@ class MainForm : Form {
     Label pathLabel, status, detail; Button select, start, cancel, open, reset; GProgressBar bar;
     string result,outputDirectory; Engine engine; bool busy,cancelRequested;
     readonly List<string> inputs=new List<string>();ListBox queue;
-    Panel gifPage,speedPage;Button gifTabButton,speedTabButton;SpeedPanel speedPanel;int activeTab;
+    Panel gifPage,speedPage,webmPage;Button gifTabButton,speedTabButton,webmTabButton;SpeedPanel speedPanel;WebmPanel webmPanel;int activeTab;
     Color bg=GUi.Background, panel=GUi.Surface2, muted=GUi.Muted;
     public MainForm() {
         Text="GIF Generator"; ClientSize=new Size(660,620); MinimumSize=MaximumSize=Size; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; StartPosition=FormStartPosition.CenterScreen; BackColor=bg; ForeColor=GUi.Text; Font=new Font("맑은 고딕",10); AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Label title=LabelAt("GIF Generator",28,22,440,48,26,Color.White); title.Font=new Font(Font.FontFamily,26,FontStyle.Bold);
-        LabelAt("GIF 만들기와 MP4 배속 변환을 한곳에서",30,76,600,28,12,muted);
+        LabelAt("GIF 만들기 · MP4 배속 · WebM 변환",30,76,600,28,12,muted);
         var drop=new GRoundedPanel { Location=new Point(28,122),Size=new Size(604,112),AllowDrop=true }; Controls.Add(drop);
         pathLabel=new Label { Text="MP4 파일을 여기에 끌어 놓으세요",Location=new Point(18,20),Size=new Size(440,70),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true,ForeColor=Color.White }; drop.Controls.Add(pathLabel);
         select=ButtonAt("파일 선택",460,34,120,42,false); drop.Controls.Add(select); select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="GIF로 만들 MP4 선택",Multiselect=true}) if(d.ShowDialog()==DialogResult.OK) SetInputs(d.FileNames); }; select.BringToFront();
@@ -201,23 +234,28 @@ class MainForm : Form {
         var gifControls=new System.Collections.Generic.List<Control>();
         foreach(Control c in Controls) if(c.Top>=122) gifControls.Add(c);
         var switcher=new GRoundedPanel {Location=new Point(28,116),Size=new Size(604,42)};Controls.Add(switcher);
-        gifTabButton=new Button {Text="MP4 → GIF",Location=new Point(3,3),Size=new Size(297,36)};GUi.Button(gifTabButton,GUi.Accent);switcher.Controls.Add(gifTabButton);
-        speedTabButton=new Button {Text="MP4 배속 → MP4",Location=new Point(304,3),Size=new Size(297,36)};GUi.Button(speedTabButton,GUi.Surface2);switcher.Controls.Add(speedTabButton);
-        gifPage=new Panel {Location=new Point(0,164),Size=new Size(660,450),BackColor=bg};speedPage=new Panel {Location=gifPage.Location,Size=gifPage.Size,BackColor=bg,Visible=false};Controls.Add(gifPage);Controls.Add(speedPage);
+        gifTabButton=new Button {Text="MP4 → GIF",Location=new Point(3,3),Size=new Size(197,36)};GUi.Button(gifTabButton,GUi.Accent);switcher.Controls.Add(gifTabButton);
+        speedTabButton=new Button {Text="MP4 배속 → MP4",Location=new Point(203,3),Size=new Size(197,36)};GUi.Button(speedTabButton,GUi.Surface2);switcher.Controls.Add(speedTabButton);
+        webmTabButton=new Button {Text="WebM → MP4",Location=new Point(403,3),Size=new Size(198,36)};GUi.Button(webmTabButton,GUi.Surface2);switcher.Controls.Add(webmTabButton);
+        gifPage=new Panel {Location=new Point(0,164),Size=new Size(660,450),BackColor=bg};speedPage=new Panel {Location=gifPage.Location,Size=gifPage.Size,BackColor=bg,Visible=false};webmPage=new Panel {Location=gifPage.Location,Size=gifPage.Size,BackColor=bg,Visible=false};Controls.Add(gifPage);Controls.Add(speedPage);Controls.Add(webmPage);
         foreach(Control c in gifControls) {c.Top-=110;gifPage.Controls.Add(c);}
         speedPanel=new SpeedPanel {Dock=DockStyle.Fill};speedPage.Controls.Add(speedPanel);
-        gifTabButton.Click+=delegate{SelectTab(0);};speedTabButton.Click+=delegate{SelectTab(1);};SelectTab(0);
+        webmPanel=new WebmPanel {Dock=DockStyle.Fill};webmPage.Controls.Add(webmPanel);
+        gifTabButton.Click+=delegate{SelectTab(0);};speedTabButton.Click+=delegate{SelectTab(1);};webmTabButton.Click+=delegate{SelectTab(2);};SelectTab(0);
         FormClosing+=delegate(object s,FormClosingEventArgs e) {
             if(busy) {e.Cancel=true;cancelRequested=true;if(engine!=null)engine.Cancelled=true;status.Text="취소 중입니다. 완료 후 창을 닫아 주세요.";}
             if(speedPanel.Busy) {e.Cancel=true; speedPanel.Cancel();}
+            if(webmPanel.Busy) {e.Cancel=true; webmPanel.Cancel();}
         };
     }
-    void SelectTab(int index){if(busy||speedPanel.Busy)return;activeTab=index;gifPage.Visible=index==0;speedPage.Visible=index==1;gifTabButton.BackColor=index==0?GUi.Accent:GUi.Surface2;speedTabButton.BackColor=index==1?GUi.Accent:GUi.Surface2;gifTabButton.ForeColor=index==0?Color.FromArgb(15,26,18):GUi.Muted;speedTabButton.ForeColor=index==1?Color.FromArgb(15,26,18):GUi.Muted;}
+    void SelectTab(int index){if(busy||speedPanel.Busy||webmPanel.Busy)return;activeTab=index;gifPage.Visible=index==0;speedPage.Visible=index==1;webmPage.Visible=index==2;gifTabButton.BackColor=index==0?GUi.Accent:GUi.Surface2;speedTabButton.BackColor=index==1?GUi.Accent:GUi.Surface2;webmTabButton.BackColor=index==2?GUi.Accent:GUi.Surface2;gifTabButton.ForeColor=index==0?Color.FromArgb(15,26,18):GUi.Muted;speedTabButton.ForeColor=index==1?Color.FromArgb(15,26,18):GUi.Muted;webmTabButton.ForeColor=index==2?Color.FromArgb(15,26,18):GUi.Muted;}
     public void SelectSpeedTab(){SelectTab(1);}
+    public void SelectWebmTab(){SelectTab(2);}
+    public void SetWebmInput(string path){SelectTab(2);webmPanel.SetInput(path);}
     Label LabelAt(string text,int x,int y,int w,int h,int size,Color color) {var l=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=color};Controls.Add(l);return l;}
     Button ButtonAt(string text,int x,int y,int w,int h,bool primary) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(w,h)};GUi.Button(b,primary?GUi.Accent:panel);Controls.Add(b);return b;}
-    void EnterFile(object s,DragEventArgs e) {e.Effect=!busy&&!speedPanel.Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;}
-    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy)return; var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0) {if(activeTab==1)speedPanel.SetInput(files[0]);else SetInputs(files);}}
+    void EnterFile(object s,DragEventArgs e) {e.Effect=!busy&&!speedPanel.Busy&&!webmPanel.Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;}
+    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy||webmPanel.Busy)return; var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0) {if(Path.GetExtension(files[0]).Equals(".webm",StringComparison.OrdinalIgnoreCase))SetWebmInput(files[0]);else if(activeTab==1)speedPanel.SetInput(files[0]);else if(activeTab==2)webmPanel.SetInput(files[0]);else SetInputs(files);}}
     void ResetInput() {
         if(busy)return;
         inputs.Clear();queue.Items.Clear();result=outputDirectory=null;engine=null;cancelRequested=false;
@@ -323,8 +361,60 @@ class SpeedPanel : UserControl {
         finally {Busy=false;start.Enabled=select.Enabled=rate.Enabled=reset.Enabled=true;cancel.Enabled=false;}
     }
 }
+class WebmPanel : UserControl {
+    Label fileLabel,status;Button select,start,cancel,open,reset;GProgressBar bar;
+    string input,result;Engine engine;
+    public bool Busy {get;private set;}
+    readonly Color surface=GUi.Surface2,muted=GUi.Muted;
+    public WebmPanel() {
+        BackColor=GUi.Background;ForeColor=GUi.Text;Font=new Font("맑은 고딕",10);AllowDrop=true;
+        var drop=new GRoundedPanel {Location=new Point(28,12),Size=new Size(604,100),AllowDrop=true};Controls.Add(drop);
+        fileLabel=new Label {Text="WebM 파일을 여기에 끌어 놓으세요",Location=new Point(18,16),Size=new Size(430,68),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true};drop.Controls.Add(fileLabel);
+        select=MakeButton("파일 선택",460,30,120);drop.Controls.Add(select);
+        select.Click+=delegate{using(var d=new OpenFileDialog {Filter="WebM 동영상|*.webm",Title="MP4로 만들 WebM 선택"})if(d.ShowDialog()==DialogResult.OK)SetInput(d.FileName);};
+        LabelAt("일반적인 플레이어에서 재생되는 H.264 MP4로 변환합니다.",30,133,600,28,11);
+        LabelAt("소리가 있으면 AAC로 함께 변환 · 원본 길이 유지",30,174,600,25,9);
+        status=LabelAt("WebM 파일을 선택하면 시작할 수 있습니다.",30,231,600,35,10);status.ForeColor=Color.White;
+        bar=new GProgressBar {Location=new Point(30,272),Size=new Size(600,10)};Controls.Add(bar);
+        start=MakeButton("MP4 만들기",30,298,210);start.BackColor=GUi.Accent;start.Enabled=false;start.Click+=async delegate{await Convert();};
+        cancel=MakeButton("취소",254,298,80);cancel.Enabled=false;cancel.Click+=delegate{Cancel();};
+        open=MakeButton("저장 폴더 열기",348,298,160);open.Enabled=false;open.Click+=delegate{if(result!=null)Process.Start("explorer.exe","/select,\""+result+"\"");};
+        reset=MakeButton("초기화",522,298,108);reset.Click+=delegate{if(Busy)return;input=result=null;engine=null;fileLabel.Text="WebM 파일을 여기에 끌어 놓으세요";bar.Value=0;status.Text="WebM 파일을 선택하면 시작할 수 있습니다.";start.Enabled=cancel.Enabled=open.Enabled=false;};
+        DragEventHandler enter=delegate(object s,DragEventArgs e){e.Effect=!Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;};
+        DragEventHandler dropped=delegate(object s,DragEventArgs e){if(Busy)return;var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0)SetInput(files[0]);};
+        DragEnter+=enter;DragDrop+=dropped;drop.DragEnter+=enter;drop.DragDrop+=dropped;
+    }
+    Label LabelAt(string text,int x,int y,int w,int h,int size){var label=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=muted};Controls.Add(label);return label;}
+    Button MakeButton(string text,int x,int y,int width){var button=new Button {Text=text,Location=new Point(x,y),Size=new Size(width,42)};GUi.Button(button,surface);Controls.Add(button);return button;}
+    public void SetInput(string path){
+        if(Busy)return;
+        if(!File.Exists(path)||!Path.GetExtension(path).Equals(".webm",StringComparison.OrdinalIgnoreCase)){MessageBox.Show("WebM 파일을 선택해 주세요.");return;}
+        input=path;result=null;open.Enabled=false;bar.Value=0;
+        fileLabel.Text=Path.GetFileName(path)+"\n"+(new FileInfo(path).Length/1000000.0).ToString("0.0")+" MB";
+        start.Enabled=true;status.Text="준비 완료 · 저장 위치를 선택하고 변환하세요.";
+    }
+    public void Cancel(){if(engine!=null&&Busy){engine.Cancelled=true;status.Text="변환을 취소하고 있습니다…";}}
+    async Task Convert(){
+        if(input==null)return;
+        string dest;
+        using(var dialog=new SaveFileDialog {Filter="MP4 동영상|*.mp4",DefaultExt="mp4",AddExtension=true,InitialDirectory=Path.GetDirectoryName(input),FileName=Path.GetFileNameWithoutExtension(input)+"_converted.mp4",OverwritePrompt=false}){
+            if(dialog.ShowDialog()!=DialogResult.OK)return;dest=dialog.FileName;
+            if(File.Exists(dest)){MessageBox.Show("같은 이름의 파일이 있습니다. 다른 이름으로 저장해 주세요.");return;}
+        }
+        Busy=true;start.Enabled=select.Enabled=reset.Enabled=open.Enabled=false;cancel.Enabled=true;bar.Value=0;
+        engine=new Engine();engine.Status=delegate(string text,int progress){if(!IsDisposed)BeginInvoke((Action)delegate{status.Text=text;bar.Value=Math.Max(0,Math.Min(100,progress));});};
+        try{string info=await Task.Run(()=>engine.ConvertWebm(input,dest));result=dest;status.Text="완료 · "+info;bar.Value=100;open.Enabled=true;}
+        catch(OperationCanceledException){status.Text="취소되었습니다.";bar.Value=0;}
+        catch(Exception ex){status.Text="변환하지 못했습니다.";MessageBox.Show(ex.Message,"GIF Generator",MessageBoxButtons.OK,MessageBoxIcon.Error);}
+        finally{Busy=false;start.Enabled=select.Enabled=reset.Enabled=true;cancel.Enabled=false;}
+    }
+}
 class Program {
     [STAThread] static int Main(string[] args) {
+        if(args.Length==3&&args[0]=="--webm") {
+            try{var engine=new Engine();var summary=engine.ConvertWebm(Path.GetFullPath(args[1]),Path.GetFullPath(args[2]));File.WriteAllText(args[2]+".result.txt",summary);return 0;}
+            catch(Exception ex){File.WriteAllText(args[2]+".error.txt",ex.ToString());return 1;}
+        }
         if(args.Length>=4&&args[0]=="--speed") {
             try {var e=new Engine();var summary=e.ChangeSpeed(Path.GetFullPath(args[1]),Path.GetFullPath(args[2]),double.Parse(args[3],CultureInfo.InvariantCulture));File.WriteAllText(args[2]+".result.txt",summary);return 0;}catch(Exception ex){File.WriteAllText(args[2]+".error.txt",ex.ToString());return 1;}
         }
@@ -338,11 +428,15 @@ class Program {
                 Application.Run(batchForm);
             }return 0;
         }
-        var form=new MainForm();if(args.Length>0&&File.Exists(args[0]))form.SetInput(args[0]);
+        var form=new MainForm();if(args.Length>0&&File.Exists(args[0])){if(Path.GetExtension(args[0]).Equals(".webm",StringComparison.OrdinalIgnoreCase))form.SetWebmInput(args[0]);else form.SetInput(args[0]);}
         if(args.Length==2&&args[0]=="--ui-batch-test"){
             string previewDirectory=Path.Combine(Path.GetTempPath(),"GifBatchPreview-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
             string first=Path.Combine(previewDirectory,"sample-01.mp4"),second=Path.Combine(previewDirectory,"sample-02.mp4");
             try{File.WriteAllBytes(first,new byte[0]);File.WriteAllBytes(second,new byte[0]);form.SetInputs(new[]{first,second});form.Show();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();}finally{Directory.Delete(previewDirectory,true);}return 0;
+        }
+        if(args.Length==2&&args[0]=="--ui-webm-test"){
+            string previewDirectory=Path.Combine(Path.GetTempPath(),"WebmPreview-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(previewDirectory);
+            try{string sample=Path.Combine(previewDirectory,"sample.webm");File.WriteAllBytes(sample,new byte[2400000]);form.SetWebmInput(sample);form.Show();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();}finally{Directory.Delete(previewDirectory,true);}return 0;
         }
         if(args.Length==2&&(args[0]=="--ui-test"||args[0]=="--ui-speed-test")) {form.Show();if(args[0]=="--ui-speed-test")form.SelectSpeedTab();Application.DoEvents();using(var b=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));b.Save(args[1]);}form.Close();return 0;}
         Application.Run(form);return 0;
