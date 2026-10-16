@@ -1,12 +1,12 @@
 {
-  "tag": "my-windows-apps-setup-v1.0.19",
-  "title": "My Windows Apps Setup v1.0.19",
-  "source_url": "https://github.com/Lee-JaeWon/My-Windows-Apps/releases/download/my-windows-apps-setup-v1.0.19/My.Windows.Apps.Setup.exe",
-  "sha256": "53b709c50a5e8194219eb22b14d24f84af244c3a9c9e7a75e2972af6c1c82ba7",
+  "tag": "my-windows-apps-setup-v1.0.20",
+  "title": "My Windows Apps Setup v1.0.20",
+  "source_url": "https://github.com/Lee-JaeWon/My-Windows-Apps/releases/download/my-windows-apps-setup-v1.0.20/My.Windows.Apps.Setup.exe",
+  "sha256": "c06afa989aec9d814dbe42706a4426a7c7c2b0c9544f4fa47cad82aff660c068",
   "source_blobs": {
     "apps/gpt-usage-tray/GPTUsageTray.cs": "bf551884aa8db412ab8193d7926486a18c760347",
-    "installer/MyWindowsAppsSetup.cs": "8fe1ac5b3d67b59e46032257d6dd525b6911ff2a",
-    "apps/gif-generator/GifMaker.cs": "40ccd2c48f5ed00e5f63b547d70a9a56408abaaf",
+    "installer/MyWindowsAppsSetup.cs": "17d0d77880fa50d88b784cd1c245178283fbcd8d",
+    "apps/gif-generator/GifMaker.cs": "a9af4711a3e3f5b3e297237da773d5666dba49e1",
     "apps/server-monitor/ServerMonitor.cs": "9e94d90c0b6239be6ef4dc9f17cbbc6694d1b01c"
   }
 }
