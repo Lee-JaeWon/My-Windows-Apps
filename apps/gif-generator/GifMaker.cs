@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: AssemblyTitle("GIF Generator")]
 [assembly: AssemblyProduct("GIF Generator")]
 [assembly: AssemblyDescription("MP4 to GIF, MP4 speed and WebM to MP4 converter")]
-[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.7.1.0")]
 
 static class GUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -255,7 +255,7 @@ class MainForm : Form {
     Label LabelAt(string text,int x,int y,int w,int h,int size,Color color) {var l=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=color};Controls.Add(l);return l;}
     Button ButtonAt(string text,int x,int y,int w,int h,bool primary) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(w,h)};GUi.Button(b,primary?GUi.Accent:panel);Controls.Add(b);return b;}
     void EnterFile(object s,DragEventArgs e) {e.Effect=!busy&&!speedPanel.Busy&&!webmPanel.Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;}
-    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy||webmPanel.Busy)return; var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0) {if(Path.GetExtension(files[0]).Equals(".webm",StringComparison.OrdinalIgnoreCase))SetWebmInput(files[0]);else if(activeTab==1)speedPanel.SetInput(files[0]);else if(activeTab==2)webmPanel.SetInput(files[0]);else SetInputs(files);}}
+    void DropFile(object s,DragEventArgs e) {if(busy||speedPanel.Busy||webmPanel.Busy)return; var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0) {if(Path.GetExtension(files[0]).Equals(".webm",StringComparison.OrdinalIgnoreCase))SetWebmInput(files[0]);else if(activeTab==1)speedPanel.SetInputs(files);else if(activeTab==2)webmPanel.SetInput(files[0]);else SetInputs(files);}}
     void ResetInput() {
         if(busy)return;
         inputs.Clear();queue.Items.Clear();result=outputDirectory=null;engine=null;cancelRequested=false;
@@ -312,7 +312,7 @@ class MainForm : Form {
 }
 class SpeedPanel : UserControl {
     Label fileLabel,status; NumericUpDown rate; Button select,start,cancel,open,reset; GProgressBar bar;
-    string input,result; Engine engine;
+    string input,result; Engine engine; readonly List<string> inputs=new List<string>(); ListBox queue; bool cancelRequested;
     public bool Busy {get;private set;}
     Color surface=GUi.Surface2, muted=GUi.Muted;
     public SpeedPanel() {
@@ -320,7 +320,7 @@ class SpeedPanel : UserControl {
         var drop=new GRoundedPanel {Location=new Point(28,12),Size=new Size(604,100),AllowDrop=true}; Controls.Add(drop);
         fileLabel=new Label {Text="MP4 파일을 여기에 끌어 놓으세요",Location=new Point(18,16),Size=new Size(430,68),TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true}; drop.Controls.Add(fileLabel);
         select=MakeButton("파일 선택",460,30,120); drop.Controls.Add(select);
-        select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="배속할 MP4 선택"}) if(d.ShowDialog()==DialogResult.OK) SetInput(d.FileName); };
+        select.Click+=delegate { using(var d=new OpenFileDialog {Filter="MP4 동영상|*.mp4",Title="배속할 MP4 선택",Multiselect=true}) if(d.ShowDialog()==DialogResult.OK) SetInputs(d.FileNames); };
         LabelAt("재생 속도",30,127,90,30,10);
         rate=new NumericUpDown {Location=new Point(124,128),Size=new Size(118,30),Minimum=0.25M,Maximum=16M,DecimalPlaces=2,Increment=0.25M,Value=2M,BackColor=surface,ForeColor=Color.White,Font=new Font("맑은 고딕",12)}; Controls.Add(rate);
         LabelAt("배  (0.25~16배)",252,130,200,26,10);
@@ -331,34 +331,62 @@ class SpeedPanel : UserControl {
         start=MakeButton("배속 MP4 만들기",30,298,210); start.BackColor=GUi.Accent; start.Enabled=false; start.Click+=async delegate {await Convert();};
         cancel=MakeButton("취소",254,298,80); cancel.Enabled=false; cancel.Click+=delegate {Cancel();};
         open=MakeButton("저장 폴더 열기",348,298,160); open.Enabled=false; open.Click+=delegate {if(result!=null)Process.Start("explorer.exe","/select,\""+result+"\"");};
-        reset=MakeButton("초기화",522,298,108); reset.Click+=delegate {if(Busy)return;input=result=null;engine=null;fileLabel.Text="MP4 파일을 여기에 끌어 놓으세요";rate.Value=2M;bar.Value=0;status.Text="파일과 배속을 선택하면 시작할 수 있습니다.";start.Enabled=cancel.Enabled=open.Enabled=false;};
+        reset=MakeButton("초기화",522,298,108); reset.Click+=delegate {if(Busy)return;inputs.Clear();queue.Items.Clear();input=result=null;engine=null;fileLabel.Text="MP4 파일을 여기에 끌어 놓으세요";rate.Value=2M;bar.Value=0;status.Text="파일과 배속을 선택하면 시작할 수 있습니다.";start.Enabled=cancel.Enabled=open.Enabled=false;};
         DragEventHandler enter=delegate(object s,DragEventArgs e) {e.Effect=!Busy&&e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;};
-        DragEventHandler dropped=delegate(object s,DragEventArgs e) {if(Busy)return;var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0)SetInput(files[0]);};
+        DragEventHandler dropped=delegate(object s,DragEventArgs e) {if(Busy)return;var files=e.Data.GetData(DataFormats.FileDrop) as string[];if(files!=null&&files.Length>0)SetInputs(files);};
+        queue=new ListBox {Location=new Point(30,352),Size=new Size(600,82),BackColor=GUi.Surface,ForeColor=GUi.Text,BorderStyle=BorderStyle.None,HorizontalScrollbar=true};Controls.Add(queue);
         DragEnter+=enter; DragDrop+=dropped; drop.DragEnter+=enter; drop.DragDrop+=dropped;
     }
     Label LabelAt(string text,int x,int y,int w,int h,int size) {var l=new Label {Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=new Font("맑은 고딕",size),ForeColor=muted};Controls.Add(l);return l;}
     Button MakeButton(string text,int x,int y,int width) {var b=new Button {Text=text,Location=new Point(x,y),Size=new Size(width,42)};GUi.Button(b,surface);Controls.Add(b);return b;}
-    public void SetInput(string path) {
+    public void SetInput(string path){SetInputs(new[]{path});}
+    public void SetInputs(IEnumerable<string> files){
         if(Busy)return;
-        if(!File.Exists(path)||!Path.GetExtension(path).Equals(".mp4",StringComparison.OrdinalIgnoreCase)){MessageBox.Show("MP4 파일을 선택해 주세요.");return;}
-        input=path;result=null;open.Enabled=false;bar.Value=0;
-        fileLabel.Text=Path.GetFileName(path)+"\n"+(new FileInfo(path).Length/1000000.0).ToString("0.0")+" MB";
-        start.Enabled=true;status.Text="준비 완료 · 배속을 선택하고 변환하세요.";
+        var valid=new List<string>();
+        foreach(string file in files)if(File.Exists(file)&&Path.GetExtension(file).Equals(".mp4",StringComparison.OrdinalIgnoreCase)&&!valid.Exists(x=>string.Equals(x,file,StringComparison.OrdinalIgnoreCase)))valid.Add(file);
+        if(valid.Count==0){MessageBox.Show("MP4 파일을 선택해 주세요.");return;}
+        inputs.Clear();inputs.AddRange(valid);input=inputs[0];result=null;open.Enabled=false;bar.Value=0;queue.Items.Clear();
+        foreach(string file in inputs)queue.Items.Add("대기 · "+Path.GetFileName(file));
+        fileLabel.Text=inputs.Count==1?Path.GetFileName(input):inputs.Count+"개 MP4 파일 선택됨";
+        start.Enabled=true;status.Text="준비 완료 · 모든 파일에 같은 배속을 적용합니다.";
     }
-    public void Cancel() {if(engine!=null&&Busy){engine.Cancelled=true;status.Text="변환을 취소하고 있습니다…";}}
-    async Task Convert() {
-        if(!rate.ValidateChildren())return;
-        double speed=(double)rate.Value; string dest;
-        using(var d=new SaveFileDialog {Filter="MP4 동영상|*.mp4",DefaultExt="mp4",AddExtension=true,InitialDirectory=Path.GetDirectoryName(input),FileName=Path.GetFileNameWithoutExtension(input)+"_"+speed.ToString("0.##",CultureInfo.InvariantCulture)+"x.mp4",OverwritePrompt=false}) {
-            if(d.ShowDialog()!=DialogResult.OK)return; dest=d.FileName;
-            if(File.Exists(dest)){MessageBox.Show("같은 이름의 파일이 있습니다. 다른 이름으로 저장해 주세요.");return;}
+    public void Cancel(){if(!Busy)return;cancelRequested=true;if(engine!=null)engine.Cancelled=true;status.Text="변환을 취소하고 있습니다…";}
+    async Task Convert(){
+        if(inputs.Count==0||!rate.ValidateChildren())return;
+        double speed=(double)rate.Value;string dest=null,folder;
+        if(inputs.Count==1){
+            using(var d=new SaveFileDialog {Filter="MP4 동영상|*.mp4",DefaultExt="mp4",AddExtension=true,InitialDirectory=Path.GetDirectoryName(input),FileName=Path.GetFileNameWithoutExtension(input)+"_"+speed.ToString("0.##",CultureInfo.InvariantCulture)+"x.mp4",OverwritePrompt=false}){
+                if(d.ShowDialog()!=DialogResult.OK)return;dest=d.FileName;
+                if(File.Exists(dest)){MessageBox.Show("같은 이름의 파일이 있습니다. 다른 이름으로 저장해 주세요.");return;}
+                folder=Path.GetDirectoryName(dest);
+            }
+        }else using(var d=new FolderBrowserDialog {Description="배속 MP4를 저장할 폴더를 선택하세요",SelectedPath=Path.GetDirectoryName(input)}){
+            if(d.ShowDialog()!=DialogResult.OK)return;folder=d.SelectedPath;
         }
-        Busy=true;start.Enabled=select.Enabled=rate.Enabled=reset.Enabled=open.Enabled=false;cancel.Enabled=true;bar.Value=0;
-        engine=new Engine();engine.Status=delegate(string text,int progress){if(!IsDisposed)BeginInvoke((Action)delegate {status.Text=text;bar.Value=Math.Max(0,Math.Min(100,progress));});};
-        try {string info=await Task.Run(()=>engine.ChangeSpeed(input,dest,speed));result=dest;status.Text="완료 · "+info;bar.Value=100;open.Enabled=true;}
-        catch(OperationCanceledException){status.Text="취소되었습니다.";bar.Value=0;}
-        catch(Exception ex){status.Text="변환하지 못했습니다.";MessageBox.Show(ex.Message,"GIF Generator",MessageBoxButtons.OK,MessageBoxIcon.Error);}
-        finally {Busy=false;start.Enabled=select.Enabled=rate.Enabled=reset.Enabled=true;cancel.Enabled=false;}
+        await RunBatch(folder,dest,speed);
+    }
+    public async Task BatchTest(string[] files,string folder,double speed){SetInputs(files);await RunBatch(folder,null,speed);}
+    async Task RunBatch(string folder,string dest,double speed){
+        Busy=true;cancelRequested=false;start.Enabled=select.Enabled=rate.Enabled=reset.Enabled=open.Enabled=false;cancel.Enabled=true;bar.Value=0;
+        int successes=0,failures=0;
+        try{
+            for(int i=0;i<inputs.Count;i++){
+                if(cancelRequested)break;
+                int index=i;string file=inputs[i],target=dest;
+                if(target==null){
+                    string name=Path.GetFileNameWithoutExtension(file)+"_"+speed.ToString("0.##",CultureInfo.InvariantCulture)+"x";
+                    target=Path.Combine(folder,name+".mp4");int n=2;
+                    while(File.Exists(target))target=Path.Combine(folder,name+" ("+(n++)+").mp4");
+                }
+                queue.Items[index]="변환 중 · "+Path.GetFileName(file);queue.TopIndex=index;
+                engine=new Engine();engine.Status=delegate(string text,int progress){if(!IsDisposed)BeginInvoke((Action)delegate{status.Text=(index+1)+"/"+inputs.Count+" · "+text;bar.Value=Math.Max(0,Math.Min(100,(index*100+progress)/inputs.Count));});};
+                try{await Task.Run(()=>engine.ChangeSpeed(file,target,speed));result=target;successes++;queue.Items[index]="완료 · "+Path.GetFileName(target);}
+                catch(OperationCanceledException){cancelRequested=true;queue.Items[index]="취소 · "+Path.GetFileName(file);break;}
+                catch(Exception ex){failures++;queue.Items[index]="실패 · "+Path.GetFileName(file)+" · "+ex.Message;}
+                engine=null;bar.Value=(index+1)*100/inputs.Count;
+            }
+            status.Text=(cancelRequested?"취소됨 · ":"")+"완료 "+successes+"개 · 실패 "+failures+"개";open.Enabled=successes>0;
+        }finally{engine=null;Busy=false;start.Enabled=select.Enabled=rate.Enabled=reset.Enabled=true;cancel.Enabled=false;}
     }
 }
 class WebmPanel : UserControl {
@@ -426,6 +454,11 @@ class Program {
             using(var batchForm=new MainForm()){
                 batchForm.Shown+=async delegate {try{var files=new string[args.Length-2];Array.Copy(args,2,files,0,files.Length);await batchForm.ConvertBatchTest(files,args[1]);File.WriteAllText(Path.Combine(args[1],"batch-result.txt"),"done");}catch(Exception ex){File.WriteAllText(Path.Combine(args[1],"batch-error.txt"),ex.ToString());}finally{batchForm.Close();}};
                 Application.Run(batchForm);
+            }return 0;
+        }
+        if(args.Length>=5&&args[0]=="--speed-batch-test"){
+            using(var panel=new SpeedPanel())using(var host=new Form()){
+                host.Controls.Add(panel);host.Shown+=async delegate{try{var files=new string[args.Length-3];Array.Copy(args,3,files,0,files.Length);await panel.BatchTest(files,args[1],double.Parse(args[2],CultureInfo.InvariantCulture));}finally{host.Close();}};Application.Run(host);
             }return 0;
         }
         var form=new MainForm();if(args.Length>0&&File.Exists(args[0])){if(Path.GetExtension(args[0]).Equals(".webm",StringComparison.OrdinalIgnoreCase))form.SetWebmInput(args[0]);else form.SetInput(args[0]);}
