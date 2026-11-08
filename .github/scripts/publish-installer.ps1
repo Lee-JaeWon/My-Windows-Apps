@@ -18,7 +18,19 @@ foreach ($entry in $manifest.source_blobs.PSObject.Properties) {
 if (!(Test-Path -LiteralPath $InstallerPath)) {
     if ($Publish) { throw 'Verified installer artifact is missing.' }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallerPath) | Out-Null
-    Invoke-WebRequest -Uri $manifest.source_url -OutFile $InstallerPath -TimeoutSec 180
+    try {
+        Invoke-WebRequest -Uri $manifest.source_url -OutFile $InstallerPath -TimeoutSec 180
+    } catch {
+        # The public release redirect can time out while the asset API still works.
+        # Download the exact same asset; SHA-256 verification below is mandatory.
+        $sourceUri = [Uri]$manifest.source_url
+        $parts = $sourceUri.AbsolutePath.Trim('/').Split('/')
+        if ($sourceUri.Scheme -ne 'https' -or $sourceUri.Host -ne 'github.com' -or $parts.Count -ne 6 -or $parts[2] -ne 'releases' -or $parts[3] -ne 'download') { throw }
+        Write-Warning 'Public release download failed; retrying through the GitHub asset API.'
+        $sourceRepo = $parts[0] + '/' + $parts[1]
+        gh release download ([Uri]::UnescapeDataString($parts[4])) --repo $sourceRepo --pattern ([Uri]::UnescapeDataString($parts[5])) --output $InstallerPath --clobber
+        if ($LASTEXITCODE -ne 0) { throw 'Release asset API download failed.' }
+    }
 }
 if ((Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $manifest.sha256) {
     throw 'Installer SHA-256 mismatch.'

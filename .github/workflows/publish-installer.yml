@@ -37,6 +37,8 @@ jobs:
       - name: Verify installer hash and source
         shell: pwsh
         run: ./.github/scripts/publish-installer.ps1
+        env:
+          GH_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@v4
         with:
           name: verified-installer
