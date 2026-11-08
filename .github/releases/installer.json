@@ -1,11 +1,17 @@
 {
-  "tag": "my-windows-apps-setup-v1.0.20",
-  "title": "My Windows Apps Setup v1.0.20",
-  "source_url": "https://github.com/Lee-JaeWon/My-Windows-Apps/releases/download/my-windows-apps-setup-v1.0.20/My.Windows.Apps.Setup.exe",
-  "sha256": "c06afa989aec9d814dbe42706a4426a7c7c2b0c9544f4fa47cad82aff660c068",
+  "tag": "my-windows-apps-setup-v1.0.21",
+  "title": "My Windows Apps Setup v1.0.21",
+  "source_url": "https://github.com/Lee-JaeWon/My-Windows-Apps/releases/download/my-windows-apps-setup-v1.0.21/My.Windows.Apps.Setup.exe",
+  "sha256": "7ff32b61857bd2fae7382eed5910b60c1e79b8df62a11c4e505b5206b86fbc13",
   "source_blobs": {
-    "apps/gpt-usage-tray/GPTUsageTray.cs": "bf551884aa8db412ab8193d7926486a18c760347",
-    "installer/MyWindowsAppsSetup.cs": "17d0d77880fa50d88b784cd1c245178283fbcd8d",
+    "apps/gpt-usage-tray/GPTUsageTray.cs": "fa62b0c00cbceda30ac3d71a03ca519a33ad72ec",
+    "apps/gpt-usage-tray/DetailsForm.cs": "8ece3796f0f4e0e62d5b29c7c6953623f88bacdf",
+    "apps/gpt-usage-tray/fonts/Pretendard-Regular.ttf": "01147e9991c91198235e8deefe9c3145dfad8d2a",
+    "apps/gpt-usage-tray/fonts/Pretendard-Bold.ttf": "fb07fc65e8e568c60dfd985fb6fcdfd114da4d64",
+    "apps/gpt-usage-tray/fonts/OFL.txt": "160421b6039671e5c85e1646bee4167844a5d69c",
+    "build.ps1": "e4a162a31d88edc3fa35d66ece25fe9ab0a7b59e",
+    "build-installer.ps1": "136dca04df7f200091535a86818e303b60f8abcf",
+    "installer/MyWindowsAppsSetup.cs": "59c3d89c8090b107a6169a9afcb355138d20b2bc",
     "apps/gif-generator/GifMaker.cs": "a9af4711a3e3f5b3e297237da773d5666dba49e1",
     "apps/server-monitor/ServerMonitor.cs": "9e94d90c0b6239be6ef4dc9f17cbbc6694d1b01c"
   }
