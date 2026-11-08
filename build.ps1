@@ -20,9 +20,10 @@ if ($LASTEXITCODE -ne 0) { throw 'GIF Generator build failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Lab Server Monitor build failed.' }
 Copy-Item -LiteralPath (Join-Path $monitorSource 'collector.sh') -Destination $monitorOutput -Force
 Copy-Item -LiteralPath (Join-Path $monitorSource 'settings\servers.example.json') -Destination (Join-Path $monitorOutput 'settings') -Force
-& $compiler /nologo /target:winexe /optimize+ @references "/out:$usageOutput\GPT Usage Tray.exe" "/win32icon:$usageSource\gpt-usage.ico" "$usageSource\GPTUsageTray.cs"
+& $compiler /nologo /target:winexe /optimize+ @references "/out:$usageOutput\GPT Usage Tray.exe" "/win32icon:$usageSource\gpt-usage.ico" "/resource:$usageSource\fonts\Pretendard-Regular.ttf,Fonts.Regular" "/resource:$usageSource\fonts\Pretendard-Bold.ttf,Fonts.Bold" "/resource:$usageSource\fonts\OFL.txt,Fonts.License" "$usageSource\GPTUsageTray.cs" "$usageSource\DetailsForm.cs"
 if ($LASTEXITCODE -ne 0) { throw 'GPT Usage Tray build failed.' }
 Copy-Item -LiteralPath (Join-Path $usageSource 'gpt-usage.ico'), (Join-Path $usageSource 'README.md'), (Join-Path $usageSource 'Install.ps1') -Destination $usageOutput -Force
+Copy-Item -LiteralPath (Join-Path $usageSource 'fonts\OFL.txt') -Destination (Join-Path $usageOutput 'Pretendard-OFL.txt') -Force
 Get-ChildItem -LiteralPath $usageSource -Filter '*.cmd' | Copy-Item -Destination $usageOutput -Force
 
 if ($FFmpegDirectory) {

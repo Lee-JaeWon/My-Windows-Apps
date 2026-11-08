@@ -9,7 +9,7 @@ $installedExecutable = Join-Path $installDirectory 'GPT Usage Tray.exe'
 
 Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $installedExecutable } | Stop-Process -Force
 Copy-Item -LiteralPath $sourceExecutable -Destination $installedExecutable -Force
-foreach ($name in @('gpt-usage.ico', 'README.md')) {
+foreach ($name in @('gpt-usage.ico', 'README.md', 'Pretendard-OFL.txt')) {
     $source = Join-Path $sourceDirectory $name
     if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $installDirectory -Force }
 }

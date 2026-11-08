@@ -48,6 +48,7 @@ if ($PuttyLicensePath -and (Test-Path -LiteralPath $PuttyLicensePath)) {
 }
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'dist\GPT Usage Tray\GPT Usage Tray.exe'), (Join-Path $PSScriptRoot 'apps\gpt-usage-tray\gpt-usage.ico'), (Join-Path $PSScriptRoot 'apps\gpt-usage-tray\README.md') -Destination $usagePackage
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'apps\gpt-usage-tray\fonts\OFL.txt') -Destination (Join-Path $usagePackage 'Pretendard-OFL.txt')
 
 $gifZip = Join-Path $staging 'gif.zip'
 $monitorZip = Join-Path $staging 'monitor.zip'
