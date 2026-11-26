@@ -28,12 +28,21 @@ MP4 여러 개를 GIF로 변환하거나 MP4 재생 속도를 바꾸고, **WebM�
 
 ## 3. GPT Usage Tray
 
-![GPT Usage Tray 예시: 작업 표시줄 왼쪽의 주간 잔여량 65% 위젯](docs/screenshots/gpt-usage-taskbar.svg)
+![GPT Usage Tray 예시: 작업 표시줄 왼쪽에 GPT 65 · Claude 15 · Gemini 100 표시](docs/screenshots/gpt-usage-taskbar.svg)
 
-Codex의 **주간 잔여량**을 작업 표시줄 왼쪽에 표시하고 1분마다 갱신합니다. 위젯을 누르면 **주간·5시간 한도**와 색상 설정이 열립니다.
+**ChatGPT · Claude · Gemini**의 주간 남은 사용량(%)을 작업 표시줄 왼쪽에 나란히 표시하고 1분마다 갱신합니다.
 
-<img src="docs/screenshots/gpt-usage-details.png" alt="GPT Usage Tray 라이트 화면: 가상 주간 잔여량 65%, 5시간 잔여량 75%" width="480">
-<img src="docs/screenshots/gpt-usage-details-dark.png" alt="GPT Usage Tray 다크 화면: Windows 앱 테마에 따라 자동 전환" width="480">
+- AI마다 **색 점 + 숫자 + 남은 양 밑줄**로 구분하고, 20% 미만이면 숫자가 빨간색이 됩니다.
+- 각 AI를 누르면 그 AI의 **주간·5시간 한도**와 초기화 시각이 열립니다.
+- **이 PC에서 쓰지 않는 AI는 자동으로 빠지고** 나머지만 표시됩니다. 나중에 로그인하면 1분 안에 나타납니다.
+
+| AI | 표시하려면 |
+|---|---|
+| GPT | **Codex 앱** 설치 후 ChatGPT 계정으로 로그인 |
+| Claude | **Claude Code CLI** 설치 후 로그인 (Claude 데스크톱 앱만으로는 표시되지 않음) |
+| Gemini | **Antigravity 앱** 설치 후 Google 계정으로 로그인 (앱이 켜져 있을 때 갱신) |
+
+<img src="docs/screenshots/gpt-usage-details.png" alt="GPT Usage Tray 상세 화면: 가상 주간 잔여량 65%, 5시간 잔여량 75%, 오른쪽 위 GPT·Claude·Gemini 전환 버튼" width="480">
 
 ## Windows 보안 경고가 나오면
 

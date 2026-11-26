@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1110 260" role="img" aria-labelledby="title description">
   <title id="title">GPT Usage Tray 작업 표시줄 예시</title>
-  <desc id="description">가상의 주간 잔여량 65%를 작업 표시줄 맨 왼쪽 원형 위젯으로 표시한 모습</desc>
+  <desc id="description">작업 표시줄 맨 왼쪽에 가상의 주간 잔여량 GPT 65, Claude 15(20% 미만이라 빨간색), Gemini 100을 색 점·숫자·밑줄로 표시한 모습</desc>
   <defs>
     <linearGradient id="desktop" x2="1" y2="1">
       <stop stop-color="#cbd9e6"/>
@@ -14,26 +14,41 @@
       <feDropShadow dx="0" dy="-5" stdDeviation="11" flood-color="#506077" flood-opacity=".22"/>
     </filter>
   </defs>
-  <rect width="900" height="260" fill="url(#desktop)"/>
-  <path d="M540 0h360v155H275Z" fill="#edf3f8" opacity=".19"/>
-  <path d="M0 88h310l170 92H0Z" fill="#7c9abb" opacity=".13"/>
-  <rect y="160" width="900" height="100" fill="url(#taskbar)" filter="url(#shadow)"/>
-  <path d="M0 160h900" stroke="#ffffff" stroke-opacity=".72"/>
-  <g transform="translate(59 210)">
-    <circle r="32" fill="none" stroke="#c6ced1" stroke-width="8"/>
-    <circle r="32" fill="none" stroke="#accd43" stroke-width="8" stroke-linecap="round" stroke-dasharray="131 201" transform="rotate(-90)"/>
-    <text text-anchor="middle" dominant-baseline="central" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#17201b">65%</text>
+  <rect width="1110" height="260" fill="url(#desktop)"/>
+  <path d="M665 0h445v155H340Z" fill="#edf3f8" opacity=".19"/>
+  <path d="M0 88h380l210 92H0Z" fill="#7c9abb" opacity=".13"/>
+  <rect y="160" width="1110" height="100" fill="url(#taskbar)" filter="url(#shadow)"/>
+  <path d="M0 160h1110" stroke="#ffffff" stroke-opacity=".72"/>
+  <!-- Widget drawn in its real 186x44 px layout, scaled 1.6x like the rest of this mockup. -->
+  <g transform="translate(13 175) scale(1.6)" font-family="Segoe UI, Arial, sans-serif" font-size="19.5" font-weight="700" text-anchor="middle">
+    <g transform="translate(2 0)">
+      <circle cx="5.5" cy="15.5" r="4.5" fill="#10a37f"/>
+      <text x="31.75" y="22.56" fill="#17201b">65</text>
+      <path d="M3.5 32.56H50.5" stroke="#7d8796" stroke-width="6" stroke-linecap="round"/>
+      <path d="M3.5 32.56H34.05" stroke="#10a37f" stroke-width="6" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(66 0)">
+      <circle cx="5.5" cy="15.5" r="4.5" fill="#d97757"/>
+      <text x="31.75" y="22.56" fill="#ef4444">15</text>
+      <path d="M3.5 32.56H50.5" stroke="#7d8796" stroke-width="6" stroke-linecap="round"/>
+      <path d="M3.5 32.56H10.55" stroke="#d97757" stroke-width="6" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(130 0)">
+      <circle cx="5.5" cy="15.5" r="4.5" fill="#4285f4"/>
+      <text x="31.75" y="22.56" fill="#17201b">100</text>
+      <path d="M3.5 32.56H50.5" stroke="#4285f4" stroke-width="6" stroke-linecap="round"/>
+    </g>
   </g>
-  <path d="M122 188h18v18h-18zm23 0h18v18h-18zm-23 23h18v18h-18zm23 0h18v18h-18z" fill="#4d6b8b"/>
-  <rect x="190" y="181" width="232" height="57" rx="27" fill="#fff" stroke="#ccd5df"/>
-  <circle cx="220" cy="208" r="8" fill="none" stroke="#586b7f" stroke-width="3"/>
-  <path d="m226 214 8 8" stroke="#586b7f" stroke-width="3" stroke-linecap="round"/>
-  <text x="249" y="216" font-family="Segoe UI, Malgun Gothic, sans-serif" font-size="17" fill="#657385">검색</text>
-  <path d="M459 198h21l7 7h26v27h-54z" fill="#efbd49"/>
-  <path d="M459 207h54v25h-54z" fill="#f7d56d"/>
-  <circle cx="564" cy="210" r="23" fill="#7aa6de"/>
-  <circle cx="564" cy="210" r="12" fill="#f4f8fc"/>
-  <circle cx="564" cy="210" r="6" fill="#7aa6de"/>
-  <path d="M832 185v52" stroke="#ccd4df"/>
-  <text x="861" y="214" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#344557">12:30</text>
+  <path d="M332 188h18v18h-18zm23 0h18v18h-18zm-23 23h18v18h-18zm23 0h18v18h-18z" fill="#4d6b8b"/>
+  <rect x="400" y="181" width="232" height="57" rx="27" fill="#fff" stroke="#ccd5df"/>
+  <circle cx="430" cy="208" r="8" fill="none" stroke="#586b7f" stroke-width="3"/>
+  <path d="m436 214 8 8" stroke="#586b7f" stroke-width="3" stroke-linecap="round"/>
+  <text x="459" y="216" font-family="Segoe UI, Malgun Gothic, sans-serif" font-size="17" fill="#657385">검색</text>
+  <path d="M669 198h21l7 7h26v27h-54z" fill="#efbd49"/>
+  <path d="M669 207h54v25h-54z" fill="#f7d56d"/>
+  <circle cx="774" cy="210" r="23" fill="#7aa6de"/>
+  <circle cx="774" cy="210" r="12" fill="#f4f8fc"/>
+  <circle cx="774" cy="210" r="6" fill="#7aa6de"/>
+  <path d="M1042 185v52" stroke="#ccd4df"/>
+  <text x="1071" y="214" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#344557">12:30</text>
 </svg>

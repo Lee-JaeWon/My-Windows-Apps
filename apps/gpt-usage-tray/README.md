@@ -1,29 +1,34 @@
 # GPT Usage Tray
 
-Codex에 로그인된 ChatGPT 계정의 사용량을 Windows 알림 영역에 표시합니다.
+ChatGPT · Claude · Gemini의 주간 남은 사용량을 Windows 작업표시줄 왼쪽에 한 번에 표시합니다.
 
-- 작업표시줄 위젯: 작업표시줄 맨 왼쪽에 배경 없이 색상 원형 바와 숫자 표시
-- 숫자 색상: Windows 다크 모드에서는 흰색, 라이트 모드에서는 검정으로 자동 전환
-- 색상: 잔여량 모드(초록 → 노랑 → 빨강), 단일색, 시작·끝 색상을 정하는 커스텀 모드. 자동 저장
-- 위젯 클릭: 주간·5시간 잔여량 카드, 초기화 시각과 색상 설정 표시
-- 상세 창: Windows 앱의 라이트·다크 설정에 맞춰 자동 전환. Pretendard 글꼴 포함
-- 위젯 우클릭: 상세 보기, 새로고침 또는 앱 종료
-- 60초마다 자동 갱신
-- Windows 로그인 시 자동 실행
-- 우클릭 메뉴에서 상세 보기, 새로고침, 종료 가능
+## 화면
 
-Codex가 설치되어 있고 ChatGPT 계정으로 로그인되어 있어야 합니다. 별도 API 키를 사용하지 않으며, 설치된 Codex app-server의 읽기 인터페이스를 이용합니다. Codex 업데이트로 app-server 프로토콜이 바뀌면 앱 업데이트가 필요할 수 있습니다.
+- **작업표시줄**: AI마다 색 점 + 남은 % 숫자 + 남은 양 밑줄을 GPT · Claude · Gemini 순서로 표시합니다.
+  - 남은 양이 20% 미만이면 숫자가 빨간색이 됩니다.
+  - 값을 아직 못 읽었으면 회색 `–`, 연결된 AI가 하나도 없으면 회색 `?`가 표시됩니다.
+- **자동 숨김**: 이 PC에서 쓰지 않는(설치·로그인하지 않은) AI는 자동으로 빠지고 나머지만 빈틈없이 붙여 표시합니다. 60초마다 다시 확인하므로 나중에 로그인하면 자동으로 나타납니다.
+- **클릭**: 각 AI 칸(숫자 주변 빈 공간 포함)을 누르면 그 AI의 상세 화면이 바로 열립니다.
+- **상세 화면**: 오른쪽 위 GPT / Claude / Gemini 버튼으로 전환하고, 5시간·주간 잔여량과 초기화 시각을 보여줍니다. 연결되지 않은 AI를 누르면 연결 방법이 나옵니다.
+- **색상**: AI마다 기본 색상 또는 슬라이더로 점·밑줄 색을 고를 수 있으며 자동 저장됩니다.
+- 우클릭으로 새로고침·종료, Windows 로그인 시 자동 실행, 다크·라이트 작업표시줄에 맞춰 숫자 색 자동 전환.
 
-기존 알림 영역의 작은 아이콘은 사용하지 않습니다. 44×44 원형 게이지 하나만 작업표시줄 맨 왼쪽에 표시합니다.
+## AI별 연결 방법
+
+| AI | 필요한 것 | 읽는 곳 |
+|---|---|---|
+| GPT | **Codex 앱** 설치 + ChatGPT 계정 로그인 | Codex app-server |
+| Claude | **Claude Code CLI** 설치 + 로그인 | `%USERPROFILE%\.claude\.credentials.json` → Claude 사용량 조회 |
+| Gemini | **Antigravity 앱** 설치 + Google 계정 로그인 | 실행 중인 Antigravity 언어 서버 |
+
+- **Claude**: Windows용 Claude 데스크톱 앱 로그인만으로는 표시되지 않습니다. PowerShell에서 `irm https://claude.ai/install.ps1 | iex`로 CLI를 설치한 뒤 `claude`를 실행해 로그인하세요. `claude`를 찾을 수 없다고 나오면 `& "$env:USERPROFILE\.local\bin\claude.exe"`로 실행합니다. 로그인이 만료되면 앱이 자동으로 갱신합니다.
+- **Gemini**: Antigravity가 켜져 있을 때만 새 값을 읽고, 닫으면 마지막 값을 유지합니다.
+- Claude 사용량 조회는 5분 간격이며, 서버 제한(HTTP 429)이 오면 마지막 값을 유지하며 최대 30분까지 늦춥니다. 일시적인 오류가 나도 마지막 값을 유지하고 상세 화면에 오류를 표시합니다.
+
+세 경로 모두 별도 API 키 없이 각 앱의 로그인 정보를 쓰는 비공개 인터페이스라, 각 회사가 바꾸면 앱 업데이트가 필요할 수 있습니다.
 
 ## 설치
 
 GitHub 최신 릴리스의 **My Windows Apps Setup.exe**를 실행하고 GPT Usage Tray를 선택해 설치합니다. `%LOCALAPPDATA%\Programs\GPTUsageTray`에 설치되고 바탕화면 바로가기와 Windows 자동 실행이 설정됩니다.
 
 개인 제작 앱으로 코드 서명이 없습니다. Windows Smart App Control이 켜진 PC에서는 실행을 차단할 수 있습니다.
-
-## 글꼴 및 UI 확인
-
-상세 창은 [Pretendard](https://github.com/orioncactus/pretendard) Regular/Bold를 실행 파일에 포함합니다. 별도 글꼴 설치는 필요 없으며 라이선스는 `Pretendard-OFL.txt`에 있습니다. 원형 위젯의 글꼴·색상 계산·그리기 코드는 변경하지 않습니다.
-
-개발 시 `tests/Test-GptUsageDetails.ps1`로 색상 설정, 테마, 새로고침과 배율별 배치를 확인할 수 있습니다. `GPT Usage Tray.exe --details-preview output.png light` 또는 `dark`는 계정에 연결하지 않고 가상 데이터 화면을 만듭니다.

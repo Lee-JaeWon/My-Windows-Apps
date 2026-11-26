@@ -13,7 +13,7 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("My Windows Apps Setup")]
 [assembly: AssemblyProduct("My Windows Apps")]
 [assembly: AssemblyDescription("Installer for GIF Generator, Lab Server Monitor and GPT Usage Tray")]
-[assembly: AssemblyVersion("1.0.21.0")]
+[assembly: AssemblyVersion("1.0.22.0")]
 
 static class SetupUi {
     public static readonly Color Background=Color.FromArgb(14,18,16), Surface=Color.FromArgb(27,35,30), Surface2=Color.FromArgb(35,46,39), Text=Color.FromArgb(244,247,245), Muted=Color.FromArgb(158,171,162), Accent=Color.FromArgb(113,190,126);
@@ -34,28 +34,42 @@ class SetupForm : Form {
     readonly CheckBox gif=new CheckBox(),monitor=new CheckBox(),usage=new CheckBox();
     readonly CheckBox removeLabData=new CheckBox();readonly Button install=new Button(),uninstall=new Button();readonly SetupProgress progress=new SetupProgress();readonly Label status=new Label();
     readonly Color background=SetupUi.Background,surface=SetupUi.Surface,muted=SetupUi.Muted;
+    const int NotesHeight=88;
     public SetupForm() {
-        Text="My Windows Apps 설치 및 삭제";ClientSize=new Size(610,550);MinimumSize=MaximumSize=Size;StartPosition=FormStartPosition.CenterScreen;
+        Text="My Windows Apps 설치 및 삭제";ClientSize=new Size(610,550+NotesHeight);MinimumSize=MaximumSize=Size;StartPosition=FormStartPosition.CenterScreen;
         FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;BackColor=background;ForeColor=SetupUi.Text;Font=new Font("맑은 고딕",10);Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Controls.Add(new Label {Text="My Windows Apps",Location=new Point(30,24),Size=new Size(540,42),Font=new Font("Segoe UI",24,FontStyle.Bold)});
         Controls.Add(new Label {Text="설치하거나 삭제할 앱을 선택하세요",Location=new Point(32,69),Size=new Size(540,26),ForeColor=muted});
         AddOption(gif,30,112,"GIF Generator","MP4 → GIF·배속, WebM → MP4 변환을 한곳에서 합니다.");
         AddOption(monitor,30,210,"Lab Server Monitor","서버 GPU 메모리·사용률·온도와 RAM을 1초마다 확인합니다.");
-        AddOption(usage,30,308,"GPT Usage Tray","Codex Pro 주간 잔여 사용량을 작업표시줄 왼쪽에 표시합니다.");
+        AddUsageRequirements(AddOption(usage,30,308,"GPT Usage Tray","ChatGPT·Claude·Gemini 잔여 사용량을 작업표시줄에 표시합니다."));
         gif.Checked=monitor.Checked=usage.Checked=true;
-        removeLabData.Text="삭제할 때 Lab 로그인 정보도 함께 삭제";removeLabData.Location=new Point(31,397);removeLabData.Size=new Size(290,28);removeLabData.ForeColor=muted;Controls.Add(removeLabData);
-        progress.Location=new Point(30,435);progress.Size=new Size(290,18);progress.Maximum=3;Controls.Add(progress);
-        status.Location=new Point(31,463);status.Size=new Size(290,58);status.ForeColor=muted;status.Text="앱 파일과 필요한 도구가 모두 설치 파일 안에 포함되어 있습니다.";Controls.Add(status);
-        install.Text="선택한 앱 설치";install.Location=new Point(335,435);install.Size=new Size(116,54);SetupUi.Button(install,SetupUi.Accent);Controls.Add(install);
-        uninstall.Text="선택한 앱 삭제";uninstall.Location=new Point(465,435);uninstall.Size=new Size(116,54);SetupUi.Button(uninstall,Color.FromArgb(126,64,69));Controls.Add(uninstall);
+        removeLabData.Text="삭제할 때 Lab 로그인 정보도 함께 삭제";removeLabData.Location=new Point(31,397+NotesHeight);removeLabData.Size=new Size(290,28);removeLabData.ForeColor=muted;Controls.Add(removeLabData);
+        progress.Location=new Point(30,435+NotesHeight);progress.Size=new Size(290,18);progress.Maximum=3;Controls.Add(progress);
+        status.Location=new Point(31,463+NotesHeight);status.Size=new Size(290,58);status.ForeColor=muted;status.Text="앱 파일과 필요한 도구가 모두 설치 파일 안에 포함되어 있습니다.";Controls.Add(status);
+        install.Text="선택한 앱 설치";install.Location=new Point(335,435+NotesHeight);install.Size=new Size(116,54);SetupUi.Button(install,SetupUi.Accent);Controls.Add(install);
+        uninstall.Text="선택한 앱 삭제";uninstall.Location=new Point(465,435+NotesHeight);uninstall.Size=new Size(116,54);SetupUi.Button(uninstall,Color.FromArgb(126,64,69));Controls.Add(uninstall);
         install.Click+=delegate {BeginInstall();};uninstall.Click+=delegate {BeginUninstall();};
     }
-    void AddOption(CheckBox box,int x,int y,string title,string description) {
+    SetupCard AddOption(CheckBox box,int x,int y,string title,string description) {
         var panel=new SetupCard {Location=new Point(x,y),Size=new Size(550,82)};Controls.Add(panel);
         box.Location=new Point(17,14);box.Size=new Size(24,24);box.FlatStyle=FlatStyle.Flat;panel.Controls.Add(box);
         panel.Controls.Add(new Label {Text=title,Location=new Point(52,11),Size=new Size(470,27),Font=new Font("맑은 고딕",13,FontStyle.Bold)});
         panel.Controls.Add(new Label {Text=description,Location=new Point(53,43),Size=new Size(475,25),ForeColor=muted});
         panel.Click+=delegate {box.Checked=!box.Checked;};
+        return panel;
+    }
+    // Each AI appears only after its own app is installed and signed in, so list what each one needs.
+    void AddUsageRequirements(SetupCard panel) {
+        panel.Height+=NotesHeight;
+        string[] notes={"GPT — Codex 앱 설치 후 ChatGPT 계정으로 로그인","Claude — Claude Code CLI 설치 후 로그인 (Claude 앱만으로는 표시 안 됨)","Gemini — Antigravity 앱 설치 후 로그인 (앱이 켜져 있을 때 갱신)","준비되지 않은 AI는 자동으로 빠지고 사용하는 AI만 표시됩니다."};
+        Color[] colors={Color.FromArgb(16,163,127),Color.FromArgb(217,119,87),Color.FromArgb(66,133,244),Color.Empty};
+        var font=new Font("맑은 고딕",9);
+        for(int i=0;i<notes.Length;i++) {
+            int y=76+i*21;
+            if(colors[i]!=Color.Empty)panel.Controls.Add(new Label {Text="●",Location=new Point(52,y),Size=new Size(16,20),ForeColor=colors[i],Font=font});
+            panel.Controls.Add(new Label {Text=notes[i],Location=new Point(68,y),Size=new Size(470,20),ForeColor=colors[i]!=Color.Empty?muted:SetupUi.Text,Font=font,AutoEllipsis=true});
+        }
     }
     void BeginInstall() {
         if(!gif.Checked&&!monitor.Checked&&!usage.Checked){MessageBox.Show(this,"설치할 앱을 하나 이상 선택해 주세요.","My Windows Apps 설치");return;}
